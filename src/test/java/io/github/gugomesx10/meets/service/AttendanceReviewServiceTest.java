@@ -3,6 +3,9 @@ package io.github.gugomesx10.meets.service;
 import io.github.gugomesx10.meets.TestcontainersConfiguration;
 import io.github.gugomesx10.meets.entity.*;
 import io.github.gugomesx10.meets.entity.enums.*;
+import io.github.gugomesx10.meets.exception.BusinessRuleException;
+import io.github.gugomesx10.meets.exception.ConflictException;
+import io.github.gugomesx10.meets.exception.ForbiddenOperationException;
 import io.github.gugomesx10.meets.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -46,16 +50,13 @@ class AttendanceReviewServiceTest {
 
     @Autowired
     private AttendanceReviewRepository attendanceReviewRepository;
-
     private Institution institution;
     private Course course;
     private ClassSession classSession;
-
     private User student;
     private User instructor;
     private User admin;
     private User outsider;
-
     private AttendanceDecision decision;
 
     @BeforeEach
@@ -88,10 +89,15 @@ class AttendanceReviewServiceTest {
         course = new Course();
         course.setInstitution(institution);
         course.setName("AWS re/Start");
-        course.setDescription("Treinamento em computação em nuvem");
+        course.setDescription(
+                "Treinamento em computação em nuvem"
+        );
         course.setStartDate(LocalDate.now());
-        course.setEndDate(LocalDate.now().plusMonths(3));
+        course.setEndDate(
+                LocalDate.now().plusMonths(3)
+        );
         course.setStatus(CourseStatus.ACTIVE);
+
         course = courseRepository.save(course);
 
         CourseMembership studentMembership =
@@ -99,47 +105,76 @@ class AttendanceReviewServiceTest {
 
         studentMembership.setCourse(course);
         studentMembership.setUser(student);
-        studentMembership.setRole(CourseRole.STUDENT);
+        studentMembership.setRole(
+                CourseRole.STUDENT
+        );
 
-        courseMembershipRepository.save(studentMembership);
+        courseMembershipRepository.save(
+                studentMembership
+        );
 
         CourseMembership instructorMembership =
                 new CourseMembership();
 
         instructorMembership.setCourse(course);
         instructorMembership.setUser(instructor);
-        instructorMembership.setRole(CourseRole.INSTRUCTOR);
+        instructorMembership.setRole(
+                CourseRole.INSTRUCTOR
+        );
 
-        courseMembershipRepository.save(instructorMembership);
+        courseMembershipRepository.save(
+                instructorMembership
+        );
 
         InstitutionMembership adminMembership =
                 new InstitutionMembership();
 
         adminMembership.setInstitution(institution);
         adminMembership.setUser(admin);
-        adminMembership.setRole(InstitutionRole.ADMIN);
+        adminMembership.setRole(
+                InstitutionRole.ADMIN
+        );
 
-        institutionMembershipRepository.save(adminMembership);
+        institutionMembershipRepository.save(
+                adminMembership
+        );
 
         classSession = new ClassSession();
         classSession.setCourse(course);
         classSession.setTitle("Treinamento AWS");
         classSession.setSessionDate(LocalDate.now());
-        classSession.setStartTime(LocalTime.of(9, 0));
-        classSession.setEndTime(LocalTime.of(12, 0));
-        classSession.setStatus(ClassSessionStatus.COMPLETED);
+        classSession.setStartTime(
+                LocalTime.of(9, 0)
+        );
+        classSession.setEndTime(
+                LocalTime.of(12, 0)
+        );
+        classSession.setStatus(
+                ClassSessionStatus.COMPLETED
+        );
 
-        classSession = classSessionRepository.save(classSession);
+        classSession =
+                classSessionRepository.save(
+                        classSession
+                );
 
         decision = new AttendanceDecision();
+
         decision.setStudent(student);
         decision.setClassSession(classSession);
-        decision.setStatus(AttendanceStatus.REVIEW_REQUIRED);
+
+        decision.setStatus(
+                AttendanceStatus.REVIEW_REQUIRED
+        );
+
         decision.setDecisionSource(
                 AttendanceDecisionSource.SYSTEM
         );
 
-        decision = attendanceDecisionRepository.save(decision);
+        decision =
+                attendanceDecisionRepository.save(
+                        decision
+                );
     }
 
     @Test
@@ -224,7 +259,7 @@ class AttendanceReviewServiceTest {
     void alunoNaoDevePoderRevisarPresenca() {
 
         assertThrows(
-                IllegalStateException.class,
+                ForbiddenOperationException.class,
                 () -> attendanceReviewService.review(
                         decision.getId(),
                         student.getId(),
@@ -238,7 +273,7 @@ class AttendanceReviewServiceTest {
     void usuarioSemVinculoNaoDevePoderRevisarPresenca() {
 
         assertThrows(
-                IllegalStateException.class,
+                ForbiddenOperationException.class,
                 () -> attendanceReviewService.review(
                         decision.getId(),
                         outsider.getId(),
@@ -252,7 +287,7 @@ class AttendanceReviewServiceTest {
     void motivoDaRevisaoDeveSerObrigatorio() {
 
         assertThrows(
-                IllegalArgumentException.class,
+                BusinessRuleException.class,
                 () -> attendanceReviewService.review(
                         decision.getId(),
                         instructor.getId(),
@@ -273,7 +308,7 @@ class AttendanceReviewServiceTest {
         );
 
         assertThrows(
-                IllegalStateException.class,
+                ConflictException.class,
                 () -> attendanceReviewService.review(
                         decision.getId(),
                         instructor.getId(),
@@ -287,7 +322,7 @@ class AttendanceReviewServiceTest {
     void revisaoManualNaoPodeResultarEmPending() {
 
         assertThrows(
-                IllegalArgumentException.class,
+                BusinessRuleException.class,
                 () -> attendanceReviewService.review(
                         decision.getId(),
                         instructor.getId(),

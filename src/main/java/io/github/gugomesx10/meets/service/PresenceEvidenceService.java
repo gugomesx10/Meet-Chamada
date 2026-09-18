@@ -1,12 +1,24 @@
 package io.github.gugomesx10.meets.service;
 
 import io.github.gugomesx10.meets.entity.ClassSession;
+import io.github.gugomesx10.meets.entity.CourseMembership;
+import io.github.gugomesx10.meets.entity.InstitutionMembership;
 import io.github.gugomesx10.meets.entity.PresenceEvidence;
 import io.github.gugomesx10.meets.entity.SessionBlock;
 import io.github.gugomesx10.meets.entity.User;
+import io.github.gugomesx10.meets.entity.enums.CourseRole;
 import io.github.gugomesx10.meets.entity.enums.EvidenceSource;
+import io.github.gugomesx10.meets.entity.enums.InstitutionRole;
 import io.github.gugomesx10.meets.entity.enums.PresenceEvidenceType;
+import io.github.gugomesx10.meets.exception.BusinessRuleException;
+import io.github.gugomesx10.meets.exception.ForbiddenOperationException;
+import io.github.gugomesx10.meets.exception.ResourceNotFoundException;
+import io.github.gugomesx10.meets.repository.ClassSessionRepository;
+import io.github.gugomesx10.meets.repository.CourseMembershipRepository;
+import io.github.gugomesx10.meets.repository.InstitutionMembershipRepository;
 import io.github.gugomesx10.meets.repository.PresenceEvidenceRepository;
+import io.github.gugomesx10.meets.repository.SessionBlockRepository;
+import io.github.gugomesx10.meets.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,8 +29,13 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class PresenceEvidenceService {
-
     private final PresenceEvidenceRepository presenceEvidenceRepository;
+    private final UserRepository userRepository;
+    private final ClassSessionRepository classSessionRepository;
+    private final SessionBlockRepository sessionBlockRepository;
+    private final CourseMembershipRepository courseMembershipRepository;
+    private final InstitutionMembershipRepository institutionMembershipRepository;
+    private final AuditService auditService;
     @Transactional
     public PresenceEvidence register(
             User student,
@@ -30,7 +47,8 @@ public class PresenceEvidenceService {
             String details
     ) {
 
-        PresenceEvidence evidence = new PresenceEvidence();
+        PresenceEvidence evidence =
+                new PresenceEvidence();
 
         evidence.setStudent(student);
         evidence.setClassSession(classSession);
@@ -46,13 +64,109 @@ public class PresenceEvidenceService {
 
         evidence.setDetails(details);
 
-        return presenceEvidenceRepository.save(evidence);
+        return presenceEvidenceRepository.save(
+                evidence
+        );
+    }
+    @Transactional
+    public PresenceEvidence registerTeacherConfirmation(
+            UUID studentId,
+            UUID classSessionId,
+            UUID sessionBlockId,
+            UUID teacherId,
+            String details
+    ) {
+
+        User student =
+                userRepository
+                        .findById(studentId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Aluno não encontrado."
+                                )
+                        );
+
+        User teacher =
+                userRepository
+                        .findById(teacherId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Professor responsável não encontrado."
+                                )
+                        );
+
+        ClassSession classSession =
+                classSessionRepository
+                        .findById(classSessionId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Sessão de aula não encontrada."
+                                )
+                        );
+
+        validateStudent(
+                studentId,
+                classSession
+        );
+
+        validateTeacher(
+                teacherId,
+                classSession
+        );
+
+        SessionBlock sessionBlock = null;
+
+        if (sessionBlockId != null) {
+
+            sessionBlock =
+                    sessionBlockRepository
+                            .findById(sessionBlockId)
+                            .orElseThrow(() ->
+                                    new ResourceNotFoundException(
+                                            "Bloco da aula não encontrado."
+                                    )
+                            );
+
+            if (!sessionBlock
+                    .getClassSession()
+                    .getId()
+                    .equals(classSessionId)) {
+
+                throw new BusinessRuleException(
+                        "O bloco informado não pertence à sessão de aula."
+                );
+            }
+        }
+
+        PresenceEvidence evidence =
+                register(
+                        student,
+                        classSession,
+                        sessionBlock,
+                        PresenceEvidenceType.TEACHER_CONFIRMATION,
+                        EvidenceSource.TEACHER,
+                        Instant.now(),
+                        details
+                );
+
+        auditService.register(
+                teacher,
+                "TEACHER_CONFIRMATION_REGISTERED",
+                "PresenceEvidence",
+                evidence.getId(),
+                "Confirmação manual de presença registrada para o aluno "
+                        + student.getId()
+                        + "."
+        );
+
+        return evidence;
     }
     @Transactional(readOnly = true)
     public List<PresenceEvidence> findByStudentAndSession(
             UUID studentId,
             UUID classSessionId
     ) {
+
         return presenceEvidenceRepository
                 .findAllByStudentIdAndClassSessionId(
                         studentId,
@@ -63,8 +177,11 @@ public class PresenceEvidenceService {
     public List<PresenceEvidence> findBySession(
             UUID classSessionId
     ) {
+
         return presenceEvidenceRepository
-                .findAllByClassSessionId(classSessionId);
+                .findAllByClassSessionId(
+                        classSessionId
+                );
     }
     @Transactional(readOnly = true)
     public List<PresenceEvidence> findByStudentSessionAndType(
@@ -72,6 +189,7 @@ public class PresenceEvidenceService {
             UUID classSessionId,
             PresenceEvidenceType type
     ) {
+
         return presenceEvidenceRepository
                 .findAllByStudentIdAndClassSessionIdAndType(
                         studentId,
@@ -83,7 +201,87 @@ public class PresenceEvidenceService {
     public List<PresenceEvidence> findBySessionBlock(
             UUID sessionBlockId
     ) {
+
         return presenceEvidenceRepository
-                .findAllBySessionBlockId(sessionBlockId);
+                .findAllBySessionBlockId(
+                        sessionBlockId
+                );
+    }
+
+    private void validateStudent(
+            UUID studentId,
+            ClassSession classSession
+    ) {
+
+        CourseMembership membership =
+                courseMembershipRepository
+                        .findByUserIdAndCourseId(
+                                studentId,
+                                classSession.getCourse().getId()
+                        )
+                        .orElseThrow(() ->
+                                new BusinessRuleException(
+                                        "O usuário não pertence ao curso."
+                                )
+                        );
+
+        if (membership.getRole()
+                != CourseRole.STUDENT) {
+
+            throw new BusinessRuleException(
+                    "O usuário informado não é aluno deste curso."
+            );
+        }
+    }
+
+    private void validateTeacher(
+            UUID teacherId,
+            ClassSession classSession
+    ) {
+
+        UUID courseId =
+                classSession
+                        .getCourse()
+                        .getId();
+
+        UUID institutionId =
+                classSession
+                        .getCourse()
+                        .getInstitution()
+                        .getId();
+
+        CourseMembership courseMembership =
+                courseMembershipRepository
+                        .findByUserIdAndCourseId(
+                                teacherId,
+                                courseId
+                        )
+                        .orElse(null);
+
+        if (courseMembership != null
+                && courseMembership.getRole()
+                == CourseRole.INSTRUCTOR) {
+
+            return;
+        }
+
+        InstitutionMembership institutionMembership =
+                institutionMembershipRepository
+                        .findByUserIdAndInstitutionId(
+                                teacherId,
+                                institutionId
+                        )
+                        .orElse(null);
+
+        if (institutionMembership != null
+                && institutionMembership.getRole()
+                == InstitutionRole.ADMIN) {
+
+            return;
+        }
+
+        throw new ForbiddenOperationException(
+                "O usuário não possui permissão para confirmar esta presença."
+        );
     }
 }

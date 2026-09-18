@@ -9,6 +9,10 @@ import io.github.gugomesx10.meets.entity.enums.AttendanceDecisionSource;
 import io.github.gugomesx10.meets.entity.enums.AttendanceStatus;
 import io.github.gugomesx10.meets.entity.enums.CourseRole;
 import io.github.gugomesx10.meets.entity.enums.InstitutionRole;
+import io.github.gugomesx10.meets.exception.BusinessRuleException;
+import io.github.gugomesx10.meets.exception.ConflictException;
+import io.github.gugomesx10.meets.exception.ForbiddenOperationException;
+import io.github.gugomesx10.meets.exception.ResourceNotFoundException;
 import io.github.gugomesx10.meets.repository.AttendanceDecisionRepository;
 import io.github.gugomesx10.meets.repository.AttendanceReviewRepository;
 import io.github.gugomesx10.meets.repository.CourseMembershipRepository;
@@ -24,16 +28,12 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class AttendanceReviewService {
-
     private final AttendanceReviewRepository attendanceReviewRepository;
     private final AttendanceDecisionRepository attendanceDecisionRepository;
     private final UserRepository userRepository;
-
     private final CourseMembershipRepository courseMembershipRepository;
     private final InstitutionMembershipRepository institutionMembershipRepository;
-
     private final AuditService auditService;
-
     @Transactional
     public AttendanceReview review(
             UUID attendanceDecisionId,
@@ -42,32 +42,36 @@ public class AttendanceReviewService {
             String reason
     ) {
 
-        AttendanceDecision decision = attendanceDecisionRepository
-                .findById(attendanceDecisionId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Decisão de presença não encontrada."
-                        )
-                );
+        AttendanceDecision decision =
+                attendanceDecisionRepository
+                        .findById(attendanceDecisionId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Decisão de presença não encontrada."
+                                )
+                        );
 
-        User reviewer = userRepository
-                .findById(reviewerId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Usuário responsável pela revisão não encontrado."
-                        )
-                );
+        User reviewer =
+                userRepository
+                        .findById(reviewerId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Usuário responsável pela revisão não encontrado."
+                                )
+                        );
 
         validateNewStatus(newStatus);
 
         if (reason == null || reason.isBlank()) {
-            throw new IllegalArgumentException(
+            throw new BusinessRuleException(
                     "O motivo da revisão é obrigatório."
             );
         }
 
-        if (decision.getStatus() == AttendanceStatus.PENDING) {
-            throw new IllegalStateException(
+        if (decision.getStatus()
+                == AttendanceStatus.PENDING) {
+
+            throw new ConflictException(
                     "Uma presença pendente ainda não pode ser revisada."
             );
         }
@@ -78,17 +82,19 @@ public class AttendanceReviewService {
                         decision
                 );
 
-        AttendanceStatus previousStatus = decision.getStatus();
+        AttendanceStatus previousStatus =
+                decision.getStatus();
 
         if (previousStatus == newStatus) {
-            throw new IllegalStateException(
+            throw new ConflictException(
                     "O novo status deve ser diferente do status atual."
             );
         }
 
         Instant now = Instant.now();
 
-        AttendanceReview review = new AttendanceReview();
+        AttendanceReview review =
+                new AttendanceReview();
 
         review.setAttendanceDecision(decision);
         review.setReviewer(reviewer);
@@ -98,7 +104,9 @@ public class AttendanceReviewService {
         review.setReviewedAt(now);
 
         AttendanceReview savedReview =
-                attendanceReviewRepository.save(review);
+                attendanceReviewRepository.save(
+                        review
+                );
 
         decision.setStatus(newStatus);
         decision.setDecisionSource(source);
@@ -106,7 +114,9 @@ public class AttendanceReviewService {
         decision.setDecidedAt(now);
         decision.setReason(reason);
 
-        attendanceDecisionRepository.save(decision);
+        attendanceDecisionRepository.save(
+                decision
+        );
 
         auditService.register(
                 reviewer,
@@ -138,7 +148,9 @@ public class AttendanceReviewService {
     ) {
 
         return attendanceReviewRepository
-                .findAllByReviewerId(reviewerId);
+                .findAllByReviewerId(
+                        reviewerId
+                );
     }
 
     private void validateNewStatus(
@@ -146,7 +158,7 @@ public class AttendanceReviewService {
     ) {
 
         if (newStatus == null) {
-            throw new IllegalArgumentException(
+            throw new BusinessRuleException(
                     "O novo status é obrigatório."
             );
         }
@@ -155,7 +167,7 @@ public class AttendanceReviewService {
                 && newStatus != AttendanceStatus.ABSENT
                 && newStatus != AttendanceStatus.JUSTIFIED) {
 
-            throw new IllegalArgumentException(
+            throw new BusinessRuleException(
                     "Uma revisão manual só pode resultar em "
                             + "CONFIRMED, ABSENT ou JUSTIFIED."
             );
@@ -189,7 +201,8 @@ public class AttendanceReviewService {
                         .orElse(null);
 
         if (courseMembership != null
-                && courseMembership.getRole() == CourseRole.INSTRUCTOR) {
+                && courseMembership.getRole()
+                == CourseRole.INSTRUCTOR) {
 
             return AttendanceDecisionSource.TEACHER;
         }
@@ -203,12 +216,13 @@ public class AttendanceReviewService {
                         .orElse(null);
 
         if (institutionMembership != null
-                && institutionMembership.getRole() == InstitutionRole.ADMIN) {
+                && institutionMembership.getRole()
+                == InstitutionRole.ADMIN) {
 
             return AttendanceDecisionSource.ADMIN;
         }
 
-        throw new IllegalStateException(
+        throw new ForbiddenOperationException(
                 "O usuário não possui permissão para revisar esta presença."
         );
     }

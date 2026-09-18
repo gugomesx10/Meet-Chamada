@@ -3,6 +3,8 @@ package io.github.gugomesx10.meets.service;
 import io.github.gugomesx10.meets.TestcontainersConfiguration;
 import io.github.gugomesx10.meets.entity.*;
 import io.github.gugomesx10.meets.entity.enums.*;
+import io.github.gugomesx10.meets.exception.ConflictException;
+import io.github.gugomesx10.meets.exception.ForbiddenOperationException;
 import io.github.gugomesx10.meets.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -44,7 +45,6 @@ class CheckInServiceTest {
 
     @Autowired
     private PresenceEvidenceRepository presenceEvidenceRepository;
-
     private User instructor;
     private User student;
     private Course course;
@@ -76,16 +76,22 @@ class CheckInServiceTest {
         course.setStatus(CourseStatus.ACTIVE);
         course = courseRepository.save(course);
 
-        CourseMembership instructorMembership = new CourseMembership();
+        CourseMembership instructorMembership =
+                new CourseMembership();
+
         instructorMembership.setCourse(course);
         instructorMembership.setUser(instructor);
         instructorMembership.setRole(CourseRole.INSTRUCTOR);
+
         courseMembershipRepository.save(instructorMembership);
 
-        CourseMembership studentMembership = new CourseMembership();
+        CourseMembership studentMembership =
+                new CourseMembership();
+
         studentMembership.setCourse(course);
         studentMembership.setUser(student);
         studentMembership.setRole(CourseRole.STUDENT);
+
         courseMembershipRepository.save(studentMembership);
 
         classSession = new ClassSession();
@@ -95,39 +101,56 @@ class CheckInServiceTest {
         classSession.setStartTime(LocalTime.of(9, 0));
         classSession.setEndTime(LocalTime.of(12, 0));
         classSession.setStatus(ClassSessionStatus.IN_PROGRESS);
-        classSession = classSessionRepository.save(classSession);
+
+        classSession =
+                classSessionRepository.save(classSession);
     }
 
     @Test
     void deveAbrirCheckInQuandoUsuarioForInstrutor() {
 
-        CheckInWindow window = checkInService.openCheckIn(
-                classSession.getId(),
-                null,
-                instructor.getId(),
-                Duration.ofMinutes(3)
-        );
+        CheckInWindow window =
+                checkInService.openCheckIn(
+                        classSession.getId(),
+                        null,
+                        instructor.getId(),
+                        Duration.ofMinutes(3)
+                );
 
         assertNotNull(window.getId());
-        assertEquals(CheckInStatus.OPEN, window.getStatus());
-        assertEquals(instructor.getId(), window.getOpenedBy().getId());
-        assertEquals(classSession.getId(), window.getClassSession().getId());
+
+        assertEquals(
+                CheckInStatus.OPEN,
+                window.getStatus()
+        );
+
+        assertEquals(
+                instructor.getId(),
+                window.getOpenedBy().getId()
+        );
+
+        assertEquals(
+                classSession.getId(),
+                window.getClassSession().getId()
+        );
     }
 
     @Test
     void deveRegistrarRespostaEGerarEvidencia() {
 
-        CheckInWindow window = checkInService.openCheckIn(
-                classSession.getId(),
-                null,
-                instructor.getId(),
-                Duration.ofMinutes(3)
-        );
+        CheckInWindow window =
+                checkInService.openCheckIn(
+                        classSession.getId(),
+                        null,
+                        instructor.getId(),
+                        Duration.ofMinutes(3)
+                );
 
-        CheckInResponse response = checkInService.respond(
-                window.getId(),
-                student.getId()
-        );
+        CheckInResponse response =
+                checkInService.respond(
+                        window.getId(),
+                        student.getId()
+                );
 
         assertNotNull(response.getId());
         assertTrue(response.isValid());
@@ -163,12 +186,13 @@ class CheckInServiceTest {
     @Test
     void naoDevePermitirResponderDuasVezes() {
 
-        CheckInWindow window = checkInService.openCheckIn(
-                classSession.getId(),
-                null,
-                instructor.getId(),
-                Duration.ofMinutes(3)
-        );
+        CheckInWindow window =
+                checkInService.openCheckIn(
+                        classSession.getId(),
+                        null,
+                        instructor.getId(),
+                        Duration.ofMinutes(3)
+                );
 
         checkInService.respond(
                 window.getId(),
@@ -176,7 +200,7 @@ class CheckInServiceTest {
         );
 
         assertThrows(
-                IllegalStateException.class,
+                ConflictException.class,
                 () -> checkInService.respond(
                         window.getId(),
                         student.getId()
@@ -188,7 +212,7 @@ class CheckInServiceTest {
     void alunoNaoDevePoderAbrirCheckIn() {
 
         assertThrows(
-                IllegalStateException.class,
+                ForbiddenOperationException.class,
                 () -> checkInService.openCheckIn(
                         classSession.getId(),
                         null,
