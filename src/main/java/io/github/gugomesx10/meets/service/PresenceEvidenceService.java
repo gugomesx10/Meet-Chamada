@@ -29,6 +29,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class PresenceEvidenceService {
+
     private final PresenceEvidenceRepository presenceEvidenceRepository;
     private final UserRepository userRepository;
     private final ClassSessionRepository classSessionRepository;
@@ -47,8 +48,7 @@ public class PresenceEvidenceService {
             String details
     ) {
 
-        PresenceEvidence evidence =
-                new PresenceEvidence();
+        PresenceEvidence evidence = new PresenceEvidence();
 
         evidence.setStudent(student);
         evidence.setClassSession(classSession);
@@ -64,16 +64,14 @@ public class PresenceEvidenceService {
 
         evidence.setDetails(details);
 
-        return presenceEvidenceRepository.save(
-                evidence
-        );
+        return presenceEvidenceRepository.save(evidence);
     }
     @Transactional
     public PresenceEvidence registerTeacherConfirmation(
             UUID studentId,
             UUID classSessionId,
             UUID sessionBlockId,
-            UUID teacherId,
+            User teacher,
             String details
     ) {
 
@@ -83,15 +81,6 @@ public class PresenceEvidenceService {
                         .orElseThrow(() ->
                                 new ResourceNotFoundException(
                                         "Aluno não encontrado."
-                                )
-                        );
-
-        User teacher =
-                userRepository
-                        .findById(teacherId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Professor responsável não encontrado."
                                 )
                         );
 
@@ -110,7 +99,7 @@ public class PresenceEvidenceService {
         );
 
         validateTeacher(
-                teacherId,
+                teacher,
                 classSession
         );
 
@@ -225,8 +214,7 @@ public class PresenceEvidenceService {
                                 )
                         );
 
-        if (membership.getRole()
-                != CourseRole.STUDENT) {
+        if (membership.getRole() != CourseRole.STUDENT) {
 
             throw new BusinessRuleException(
                     "O usuário informado não é aluno deste curso."
@@ -235,9 +223,11 @@ public class PresenceEvidenceService {
     }
 
     private void validateTeacher(
-            UUID teacherId,
+            User teacher,
             ClassSession classSession
     ) {
+
+        UUID teacherId = teacher.getId();
 
         UUID courseId =
                 classSession
@@ -259,8 +249,7 @@ public class PresenceEvidenceService {
                         .orElse(null);
 
         if (courseMembership != null
-                && courseMembership.getRole()
-                == CourseRole.INSTRUCTOR) {
+                && courseMembership.getRole() == CourseRole.INSTRUCTOR) {
 
             return;
         }
@@ -274,8 +263,7 @@ public class PresenceEvidenceService {
                         .orElse(null);
 
         if (institutionMembership != null
-                && institutionMembership.getRole()
-                == InstitutionRole.ADMIN) {
+                && institutionMembership.getRole() == InstitutionRole.ADMIN) {
 
             return;
         }

@@ -12,9 +12,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -45,6 +47,7 @@ class CheckInServiceTest {
 
     @Autowired
     private PresenceEvidenceRepository presenceEvidenceRepository;
+
     private User instructor;
     private User student;
     private Course course;
@@ -55,55 +58,93 @@ class CheckInServiceTest {
 
         Institution institution = new Institution();
         institution.setName("Escola da Nuvem");
-        institution = institutionRepository.save(institution);
+
+        institution =
+                institutionRepository.save(
+                        institution
+                );
 
         instructor = new User();
         instructor.setName("Professora");
         instructor.setEmail("professora@teste.com");
-        instructor = userRepository.save(instructor);
+
+        instructor =
+                userRepository.save(
+                        instructor
+                );
 
         student = new User();
         student.setName("Gustavo");
         student.setEmail("gustavo@teste.com");
-        student = userRepository.save(student);
+
+        student =
+                userRepository.save(
+                        student
+                );
 
         course = new Course();
+
         course.setInstitution(institution);
         course.setName("AWS re/Start");
         course.setDescription("Treinamento AWS");
         course.setStartDate(LocalDate.now());
-        course.setEndDate(LocalDate.now().plusMonths(3));
-        course.setStatus(CourseStatus.ACTIVE);
-        course = courseRepository.save(course);
+        course.setEndDate(
+                LocalDate.now().plusMonths(3)
+        );
+        course.setStatus(
+                CourseStatus.ACTIVE
+        );
+
+        course =
+                courseRepository.save(
+                        course
+                );
 
         CourseMembership instructorMembership =
                 new CourseMembership();
 
         instructorMembership.setCourse(course);
         instructorMembership.setUser(instructor);
-        instructorMembership.setRole(CourseRole.INSTRUCTOR);
+        instructorMembership.setRole(
+                CourseRole.INSTRUCTOR
+        );
 
-        courseMembershipRepository.save(instructorMembership);
+        courseMembershipRepository.save(
+                instructorMembership
+        );
 
         CourseMembership studentMembership =
                 new CourseMembership();
 
         studentMembership.setCourse(course);
         studentMembership.setUser(student);
-        studentMembership.setRole(CourseRole.STUDENT);
+        studentMembership.setRole(
+                CourseRole.STUDENT
+        );
 
-        courseMembershipRepository.save(studentMembership);
+        courseMembershipRepository.save(
+                studentMembership
+        );
 
         classSession = new ClassSession();
+
         classSession.setCourse(course);
         classSession.setTitle("Aula AWS");
         classSession.setSessionDate(LocalDate.now());
-        classSession.setStartTime(LocalTime.of(9, 0));
-        classSession.setEndTime(LocalTime.of(12, 0));
-        classSession.setStatus(ClassSessionStatus.IN_PROGRESS);
+        classSession.setStartTime(
+                LocalTime.of(9, 0)
+        );
+        classSession.setEndTime(
+                LocalTime.of(12, 0)
+        );
+        classSession.setStatus(
+                ClassSessionStatus.IN_PROGRESS
+        );
 
         classSession =
-                classSessionRepository.save(classSession);
+                classSessionRepository.save(
+                        classSession
+                );
     }
 
     @Test
@@ -113,11 +154,13 @@ class CheckInServiceTest {
                 checkInService.openCheckIn(
                         classSession.getId(),
                         null,
-                        instructor.getId(),
+                        instructor,
                         Duration.ofMinutes(3)
                 );
 
-        assertNotNull(window.getId());
+        assertNotNull(
+                window.getId()
+        );
 
         assertEquals(
                 CheckInStatus.OPEN,
@@ -142,18 +185,23 @@ class CheckInServiceTest {
                 checkInService.openCheckIn(
                         classSession.getId(),
                         null,
-                        instructor.getId(),
+                        instructor,
                         Duration.ofMinutes(3)
                 );
 
         CheckInResponse response =
                 checkInService.respond(
                         window.getId(),
-                        student.getId()
+                        student
                 );
 
-        assertNotNull(response.getId());
-        assertTrue(response.isValid());
+        assertNotNull(
+                response.getId()
+        );
+
+        assertTrue(
+                response.isValid()
+        );
 
         assertTrue(
                 checkInResponseRepository
@@ -170,7 +218,10 @@ class CheckInServiceTest {
                                 classSession.getId()
                         );
 
-        assertEquals(1, evidences.size());
+        assertEquals(
+                1,
+                evidences.size()
+        );
 
         assertEquals(
                 PresenceEvidenceType.CHECK_IN,
@@ -190,20 +241,20 @@ class CheckInServiceTest {
                 checkInService.openCheckIn(
                         classSession.getId(),
                         null,
-                        instructor.getId(),
+                        instructor,
                         Duration.ofMinutes(3)
                 );
 
         checkInService.respond(
                 window.getId(),
-                student.getId()
+                student
         );
 
         assertThrows(
                 ConflictException.class,
                 () -> checkInService.respond(
                         window.getId(),
-                        student.getId()
+                        student
                 )
         );
     }
@@ -216,7 +267,7 @@ class CheckInServiceTest {
                 () -> checkInService.openCheckIn(
                         classSession.getId(),
                         null,
-                        student.getId(),
+                        student,
                         Duration.ofMinutes(3)
                 )
         );

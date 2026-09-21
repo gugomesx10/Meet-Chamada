@@ -12,8 +12,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -50,6 +52,7 @@ class PresenceEvidenceServiceTest {
 
     @Autowired
     private AuditEventRepository auditEventRepository;
+
     private Institution institution;
     private Course course;
     private ClassSession classSession;
@@ -171,7 +174,7 @@ class PresenceEvidenceServiceTest {
                                 student.getId(),
                                 classSession.getId(),
                                 null,
-                                instructor.getId(),
+                                instructor,
                                 "Aluno participou da atividade."
                         );
 
@@ -204,7 +207,7 @@ class PresenceEvidenceServiceTest {
                                 student.getId(),
                                 classSession.getId(),
                                 null,
-                                admin.getId(),
+                                admin,
                                 "Presença confirmada administrativamente."
                         );
 
@@ -231,7 +234,7 @@ class PresenceEvidenceServiceTest {
                                 student.getId(),
                                 classSession.getId(),
                                 null,
-                                student.getId(),
+                                student,
                                 "Tentativa inválida."
                         )
         );
@@ -247,7 +250,7 @@ class PresenceEvidenceServiceTest {
                                 student.getId(),
                                 classSession.getId(),
                                 null,
-                                outsider.getId(),
+                                outsider,
                                 "Tentativa inválida."
                         )
         );
@@ -263,7 +266,7 @@ class PresenceEvidenceServiceTest {
                                 instructor.getId(),
                                 classSession.getId(),
                                 null,
-                                instructor.getId(),
+                                instructor,
                                 "Instrutor não pode ser tratado como aluno."
                         )
         );
@@ -336,7 +339,7 @@ class PresenceEvidenceServiceTest {
                                 student.getId(),
                                 classSession.getId(),
                                 savedBlock.getId(),
-                                instructor.getId(),
+                                instructor,
                                 "Tentativa com bloco incorreto."
                         )
         );
@@ -375,7 +378,7 @@ class PresenceEvidenceServiceTest {
                                 student.getId(),
                                 classSession.getId(),
                                 block.getId(),
-                                instructor.getId(),
+                                instructor,
                                 "Aluno participou do bloco técnico."
                         );
 
@@ -398,7 +401,7 @@ class PresenceEvidenceServiceTest {
                                 student.getId(),
                                 classSession.getId(),
                                 null,
-                                instructor.getId(),
+                                instructor,
                                 "Participação confirmada."
                         );
 
@@ -444,7 +447,7 @@ class PresenceEvidenceServiceTest {
                                 student.getId(),
                                 classSession.getId(),
                                 null,
-                                instructor.getId(),
+                                instructor,
                                 "Aluno respondeu durante a aula."
                         );
 

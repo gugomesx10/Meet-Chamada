@@ -1,12 +1,12 @@
 package io.github.gugomesx10.meets.controller;
 
-import io.github.gugomesx10.meets.dto.checkin.CheckInActionRequest;
 import io.github.gugomesx10.meets.dto.checkin.CheckInResponseDto;
 import io.github.gugomesx10.meets.dto.checkin.CheckInWindowResponse;
 import io.github.gugomesx10.meets.dto.checkin.OpenCheckInRequest;
-import io.github.gugomesx10.meets.dto.checkin.RespondCheckInRequest;
 import io.github.gugomesx10.meets.entity.CheckInResponse;
 import io.github.gugomesx10.meets.entity.CheckInWindow;
+import io.github.gugomesx10.meets.entity.User;
+import io.github.gugomesx10.meets.service.AuthenticatedUserService;
 import io.github.gugomesx10.meets.service.CheckInService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,50 +24,67 @@ import java.util.UUID;
 public class CheckInController {
 
     private final CheckInService checkInService;
+    private final AuthenticatedUserService authenticatedUserService;
 
     @PostMapping
     public ResponseEntity<CheckInWindowResponse> open(
             @Valid @RequestBody OpenCheckInRequest request
     ) {
 
-        CheckInWindow window = checkInService.openCheckIn(
-                request.classSessionId(),
-                request.sessionBlockId(),
-                request.openedById(),
-                Duration.ofMinutes(request.durationMinutes())
-        );
+        User openedBy =
+                authenticatedUserService.getCurrentUser();
+
+        CheckInWindow window =
+                checkInService.openCheckIn(
+                        request.classSessionId(),
+                        request.sessionBlockId(),
+                        openedBy,
+                        Duration.ofMinutes(
+                                request.durationMinutes()
+                        )
+                );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(CheckInWindowResponse.from(window));
+                .body(
+                        CheckInWindowResponse.from(window)
+                );
     }
 
     @PostMapping("/{checkInId}/responses")
     public ResponseEntity<CheckInResponseDto> respond(
-            @PathVariable UUID checkInId,
-            @Valid @RequestBody RespondCheckInRequest request
+            @PathVariable UUID checkInId
     ) {
 
-        CheckInResponse response = checkInService.respond(
-                checkInId,
-                request.studentId()
-        );
+        User student =
+                authenticatedUserService.getCurrentUser();
+
+        CheckInResponse response =
+                checkInService.respond(
+                        checkInId,
+                        student
+                );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(CheckInResponseDto.from(response));
+                .body(
+                        CheckInResponseDto.from(response)
+                );
     }
 
     @PatchMapping("/{checkInId}/close")
     public ResponseEntity<CheckInWindowResponse> close(
-            @PathVariable UUID checkInId,
-            @Valid @RequestBody CheckInActionRequest request
+            @PathVariable UUID checkInId
     ) {
 
-        CheckInWindow window = checkInService.closeCheckIn(
-                checkInId,
-                request.userId()
-        );
+        User user =
+                authenticatedUserService.getCurrentUser();
+
+        CheckInWindow window =
+                checkInService.closeCheckIn(
+                        checkInId,
+                        user
+                );
 
         return ResponseEntity.ok(
                 CheckInWindowResponse.from(window)
@@ -76,14 +93,17 @@ public class CheckInController {
 
     @PatchMapping("/{checkInId}/cancel")
     public ResponseEntity<CheckInWindowResponse> cancel(
-            @PathVariable UUID checkInId,
-            @Valid @RequestBody CheckInActionRequest request
+            @PathVariable UUID checkInId
     ) {
 
-        CheckInWindow window = checkInService.cancelCheckIn(
-                checkInId,
-                request.userId()
-        );
+        User user =
+                authenticatedUserService.getCurrentUser();
+
+        CheckInWindow window =
+                checkInService.cancelCheckIn(
+                        checkInId,
+                        user
+                );
 
         return ResponseEntity.ok(
                 CheckInWindowResponse.from(window)

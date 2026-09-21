@@ -2,7 +2,10 @@ package io.github.gugomesx10.meets.controller;
 
 import io.github.gugomesx10.meets.dto.evidence.PresenceEvidenceResponse;
 import io.github.gugomesx10.meets.dto.evidence.TeacherConfirmationRequest;
+import io.github.gugomesx10.meets.entity.PresenceEvidence;
+import io.github.gugomesx10.meets.entity.User;
 import io.github.gugomesx10.meets.entity.enums.PresenceEvidenceType;
+import io.github.gugomesx10.meets.service.AuthenticatedUserService;
 import io.github.gugomesx10.meets.service.PresenceEvidenceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,30 +21,28 @@ import java.util.UUID;
 public class PresenceEvidenceController {
 
     private final PresenceEvidenceService presenceEvidenceService;
+    private final AuthenticatedUserService authenticatedUserService;
 
-    @PostMapping(
-            "/sessions/{classSessionId}/teacher-confirmations"
-    )
-    public ResponseEntity<PresenceEvidenceResponse>
-    registerTeacherConfirmation(
+    @PostMapping("/sessions/{classSessionId}/teacher-confirmations")
+    public ResponseEntity<PresenceEvidenceResponse> registerTeacherConfirmation(
             @PathVariable UUID classSessionId,
             @Valid @RequestBody TeacherConfirmationRequest request
     ) {
 
-        var evidence =
+        User teacher = authenticatedUserService.getCurrentUser();
+
+        PresenceEvidence evidence =
                 presenceEvidenceService.registerTeacherConfirmation(
                         request.studentId(),
                         classSessionId,
                         request.sessionBlockId(),
-                        request.teacherId(),
+                        teacher,
                         request.details()
                 );
 
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(
-                        PresenceEvidenceResponse.from(evidence)
-                );
+        return ResponseEntity.ok(
+                PresenceEvidenceResponse.from(evidence)
+        );
     }
 
     @GetMapping(

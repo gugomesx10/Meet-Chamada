@@ -8,9 +8,8 @@ public record OpenCheckInRequest(
         @NotNull
         UUID classSessionId,
         UUID sessionBlockId,
-        @NotNull
-        UUID openedById,
         @Positive
         long durationMinutes
+
 ) {
 }

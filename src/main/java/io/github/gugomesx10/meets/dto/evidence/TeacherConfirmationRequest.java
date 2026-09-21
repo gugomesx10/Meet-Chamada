@@ -8,8 +8,6 @@ public record TeacherConfirmationRequest(
         @NotNull
         UUID studentId,
         UUID sessionBlockId,
-        @NotNull
-        UUID teacherId,
         @Size(max = 1000)
         String details
 

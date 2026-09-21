@@ -19,7 +19,6 @@ import io.github.gugomesx10.meets.repository.CheckInWindowRepository;
 import io.github.gugomesx10.meets.repository.ClassSessionRepository;
 import io.github.gugomesx10.meets.repository.CourseMembershipRepository;
 import io.github.gugomesx10.meets.repository.SessionBlockRepository;
-import io.github.gugomesx10.meets.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,15 +34,15 @@ public class CheckInService {
     private final CheckInResponseRepository checkInResponseRepository;
     private final ClassSessionRepository classSessionRepository;
     private final SessionBlockRepository sessionBlockRepository;
-    private final UserRepository userRepository;
     private final CourseMembershipRepository courseMembershipRepository;
     private final PresenceEvidenceService presenceEvidenceService;
     private final AuditService auditService;
+
     @Transactional
     public CheckInWindow openCheckIn(
             UUID classSessionId,
             UUID sessionBlockId,
-            UUID openedById,
+            User openedBy,
             Duration duration
     ) {
 
@@ -65,17 +64,8 @@ public class CheckInService {
                                 )
                         );
 
-        User openedBy =
-                userRepository
-                        .findById(openedById)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Usuário responsável pelo check-in não encontrado."
-                                )
-                        );
-
         validateInstructor(
-                openedById,
+                openedBy,
                 classSession
         );
 
@@ -137,7 +127,7 @@ public class CheckInService {
     @Transactional(noRollbackFor = ConflictException.class)
     public CheckInResponse respond(
             UUID checkInWindowId,
-            UUID studentId
+            User student
     ) {
 
         CheckInWindow window =
@@ -146,15 +136,6 @@ public class CheckInService {
                         .orElseThrow(() ->
                                 new ResourceNotFoundException(
                                         "Check-in não encontrado."
-                                )
-                        );
-
-        User student =
-                userRepository
-                        .findById(studentId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Aluno não encontrado."
                                 )
                         );
 
@@ -182,14 +163,14 @@ public class CheckInService {
         }
 
         validateStudent(
-                studentId,
+                student,
                 window.getClassSession()
         );
 
         if (checkInResponseRepository
                 .existsByCheckInWindowIdAndStudentId(
                         checkInWindowId,
-                        studentId
+                        student.getId()
                 )) {
 
             throw new ConflictException(
@@ -233,7 +214,7 @@ public class CheckInService {
     @Transactional
     public CheckInWindow closeCheckIn(
             UUID checkInWindowId,
-            UUID userId
+            User user
     ) {
 
         CheckInWindow window =
@@ -241,17 +222,8 @@ public class CheckInService {
                         checkInWindowId
                 );
 
-        User user =
-                userRepository
-                        .findById(userId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Usuário não encontrado."
-                                )
-                        );
-
         validateInstructor(
-                userId,
+                user,
                 window.getClassSession()
         );
 
@@ -285,7 +257,7 @@ public class CheckInService {
     @Transactional
     public CheckInWindow cancelCheckIn(
             UUID checkInWindowId,
-            UUID userId
+            User user
     ) {
 
         CheckInWindow window =
@@ -293,17 +265,8 @@ public class CheckInService {
                         checkInWindowId
                 );
 
-        User user =
-                userRepository
-                        .findById(userId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Usuário não encontrado."
-                                )
-                        );
-
         validateInstructor(
-                userId,
+                user,
                 window.getClassSession()
         );
 
@@ -387,14 +350,14 @@ public class CheckInService {
     }
 
     private void validateInstructor(
-            UUID userId,
+            User user,
             ClassSession classSession
     ) {
 
         CourseMembership membership =
                 courseMembershipRepository
                         .findByUserIdAndCourseId(
-                                userId,
+                                user.getId(),
                                 classSession
                                         .getCourse()
                                         .getId()
@@ -415,14 +378,14 @@ public class CheckInService {
     }
 
     private void validateStudent(
-            UUID studentId,
+            User student,
             ClassSession classSession
     ) {
 
         CourseMembership membership =
                 courseMembershipRepository
                         .findByUserIdAndCourseId(
-                                studentId,
+                                student.getId(),
                                 classSession
                                         .getCourse()
                                         .getId()
@@ -437,7 +400,7 @@ public class CheckInService {
                 != CourseRole.STUDENT) {
 
             throw new ForbiddenOperationException(
-                    "O usuário informado não é aluno deste curso."
+                    "O usuário autenticado não é aluno deste curso."
             );
         }
     }
