@@ -28,11 +28,13 @@ public class CourseMembershipService {
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
     private final InstitutionMembershipRepository institutionMembershipRepository;
+    private final AuthorizationService authorizationService;
     @Transactional
     public CourseMembership create(
             UUID courseId,
             UUID userId,
-            CourseRole role
+            CourseRole role,
+            User currentUser
     ) {
 
         Course course =
@@ -44,6 +46,11 @@ public class CourseMembershipService {
                                 )
                         );
 
+        authorizationService.requireInstitutionAdmin(
+                currentUser,
+                course.getInstitution().getId()
+        );
+
         User user =
                 userRepository
                         .findById(userId)
@@ -54,6 +61,7 @@ public class CourseMembershipService {
                         );
 
         if (role == null) {
+
             throw new BusinessRuleException(
                     "O papel do usuário no curso é obrigatório."
             );
@@ -101,8 +109,25 @@ public class CourseMembershipService {
     @Transactional(readOnly = true)
     public CourseMembership find(
             UUID courseId,
-            UUID userId
+            UUID userId,
+            User currentUser
     ) {
+
+        Course course =
+                courseRepository
+                        .findById(courseId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Curso não encontrado."
+                                )
+                        );
+
+        authorizationService
+                .requireCourseInstructorOrAdminOrSelf(
+                        currentUser,
+                        course,
+                        userId
+                );
 
         return courseMembershipRepository
                 .findByUserIdAndCourseId(
@@ -117,31 +142,48 @@ public class CourseMembershipService {
     }
     @Transactional(readOnly = true)
     public List<CourseMembership> findByCourse(
-            UUID courseId
+            UUID courseId,
+            User currentUser
     ) {
 
-        if (!courseRepository.existsById(courseId)) {
-            throw new ResourceNotFoundException(
-                    "Curso não encontrado."
-            );
-        }
+        Course course =
+                courseRepository
+                        .findById(courseId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Curso não encontrado."
+                                )
+                        );
+
+        authorizationService
+                .requireCourseInstructorOrAdmin(
+                        currentUser,
+                        course
+                );
 
         return courseMembershipRepository
-                .findAllByCourseId(courseId);
+                .findAllByCourseId(
+                        courseId
+                );
     }
     @Transactional(readOnly = true)
     public List<CourseMembership> findByUser(
             UUID userId
     ) {
 
-        if (!userRepository.existsById(userId)) {
+        if (!userRepository.existsById(
+                userId
+        )) {
+
             throw new ResourceNotFoundException(
                     "Usuário não encontrado."
             );
         }
 
         return courseMembershipRepository
-                .findAllByUserId(userId);
+                .findAllByUserId(
+                        userId
+                );
     }
 
     private void validateInstitutionRole(
@@ -153,7 +195,8 @@ public class CourseMembershipService {
                 institutionMembership.getRole();
 
         if (courseRole == CourseRole.STUDENT
-                && institutionRole != InstitutionRole.STUDENT) {
+                && institutionRole
+                != InstitutionRole.STUDENT) {
 
             throw new ForbiddenOperationException(
                     "Somente um aluno da instituição pode ser matriculado como aluno do curso."
@@ -161,8 +204,10 @@ public class CourseMembershipService {
         }
 
         if (courseRole == CourseRole.INSTRUCTOR
-                && institutionRole != InstitutionRole.TEACHER
-                && institutionRole != InstitutionRole.ADMIN) {
+                && institutionRole
+                != InstitutionRole.TEACHER
+                && institutionRole
+                != InstitutionRole.ADMIN) {
 
             throw new ForbiddenOperationException(
                     "Somente professor ou administrador da instituição pode atuar como instrutor."

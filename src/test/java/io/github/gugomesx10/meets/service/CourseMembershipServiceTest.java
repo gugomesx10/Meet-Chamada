@@ -106,7 +106,9 @@ class CourseMembershipServiceTest {
         );
 
         course =
-                courseRepository.save(course);
+                courseRepository.save(
+                        course
+                );
     }
 
     @Test
@@ -116,10 +118,13 @@ class CourseMembershipServiceTest {
                 courseMembershipService.create(
                         course.getId(),
                         student.getId(),
-                        CourseRole.STUDENT
+                        CourseRole.STUDENT,
+                        admin
                 );
 
-        assertNotNull(membership.getId());
+        assertNotNull(
+                membership.getId()
+        );
 
         assertEquals(
                 CourseRole.STUDENT,
@@ -134,7 +139,8 @@ class CourseMembershipServiceTest {
                 courseMembershipService.create(
                         course.getId(),
                         teacher.getId(),
-                        CourseRole.INSTRUCTOR
+                        CourseRole.INSTRUCTOR,
+                        admin
                 );
 
         assertEquals(
@@ -150,7 +156,8 @@ class CourseMembershipServiceTest {
                 courseMembershipService.create(
                         course.getId(),
                         admin.getId(),
-                        CourseRole.INSTRUCTOR
+                        CourseRole.INSTRUCTOR,
+                        admin
                 );
 
         assertEquals(
@@ -167,7 +174,8 @@ class CourseMembershipServiceTest {
                 () -> courseMembershipService.create(
                         course.getId(),
                         student.getId(),
-                        CourseRole.INSTRUCTOR
+                        CourseRole.INSTRUCTOR,
+                        admin
                 )
         );
     }
@@ -180,7 +188,8 @@ class CourseMembershipServiceTest {
                 () -> courseMembershipService.create(
                         course.getId(),
                         teacher.getId(),
-                        CourseRole.STUDENT
+                        CourseRole.STUDENT,
+                        admin
                 )
         );
     }
@@ -193,7 +202,8 @@ class CourseMembershipServiceTest {
                 () -> courseMembershipService.create(
                         course.getId(),
                         outsider.getId(),
-                        CourseRole.STUDENT
+                        CourseRole.STUDENT,
+                        admin
                 )
         );
     }
@@ -204,7 +214,8 @@ class CourseMembershipServiceTest {
         courseMembershipService.create(
                 course.getId(),
                 student.getId(),
-                CourseRole.STUDENT
+                CourseRole.STUDENT,
+                admin
         );
 
         assertThrows(
@@ -212,24 +223,27 @@ class CourseMembershipServiceTest {
                 () -> courseMembershipService.create(
                         course.getId(),
                         student.getId(),
-                        CourseRole.STUDENT
+                        CourseRole.STUDENT,
+                        admin
                 )
         );
     }
 
     @Test
-    void deveEncontrarVinculoDoUsuarioNoCurso() {
+    void alunoDeveEncontrarProprioVinculoNoCurso() {
 
         courseMembershipService.create(
                 course.getId(),
                 student.getId(),
-                CourseRole.STUDENT
+                CourseRole.STUDENT,
+                admin
         );
 
         CourseMembership membership =
                 courseMembershipService.find(
                         course.getId(),
-                        student.getId()
+                        student.getId(),
+                        student
                 );
 
         assertEquals(
@@ -239,29 +253,94 @@ class CourseMembershipServiceTest {
     }
 
     @Test
-    void deveListarMembrosDoCurso() {
+    void administradorDeveListarMembrosDoCurso() {
 
         courseMembershipService.create(
                 course.getId(),
                 student.getId(),
-                CourseRole.STUDENT
+                CourseRole.STUDENT,
+                admin
         );
 
         courseMembershipService.create(
                 course.getId(),
                 teacher.getId(),
-                CourseRole.INSTRUCTOR
+                CourseRole.INSTRUCTOR,
+                admin
         );
 
         var memberships =
                 courseMembershipService
                         .findByCourse(
-                                course.getId()
+                                course.getId(),
+                                admin
                         );
 
         assertEquals(
                 2,
                 memberships.size()
+        );
+    }
+
+    @Test
+    void instrutorDeveListarMembrosDoCurso() {
+
+        courseMembershipService.create(
+                course.getId(),
+                student.getId(),
+                CourseRole.STUDENT,
+                admin
+        );
+
+        courseMembershipService.create(
+                course.getId(),
+                teacher.getId(),
+                CourseRole.INSTRUCTOR,
+                admin
+        );
+
+        var memberships =
+                courseMembershipService.findByCourse(
+                        course.getId(),
+                        teacher
+                );
+
+        assertEquals(
+                2,
+                memberships.size()
+        );
+    }
+
+    @Test
+    void alunoNaoDeveListarTodosOsMembrosDoCurso() {
+
+        courseMembershipService.create(
+                course.getId(),
+                student.getId(),
+                CourseRole.STUDENT,
+                admin
+        );
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> courseMembershipService.findByCourse(
+                        course.getId(),
+                        student
+                )
+        );
+    }
+
+    @Test
+    void alunoNaoDeveAdicionarOutroUsuarioAoCurso() {
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> courseMembershipService.create(
+                        course.getId(),
+                        student.getId(),
+                        CourseRole.STUDENT,
+                        student
+                )
         );
     }
 
@@ -273,7 +352,8 @@ class CourseMembershipServiceTest {
                 () -> courseMembershipService.create(
                         course.getId(),
                         student.getId(),
-                        null
+                        null,
+                        admin
                 )
         );
     }

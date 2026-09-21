@@ -2,6 +2,8 @@ package io.github.gugomesx10.meets.controller;
 
 import io.github.gugomesx10.meets.dto.course.CourseResponse;
 import io.github.gugomesx10.meets.dto.course.CreateCourseRequest;
+import io.github.gugomesx10.meets.entity.User;
+import io.github.gugomesx10.meets.service.AuthenticatedUserService;
 import io.github.gugomesx10.meets.service.CourseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,11 +19,15 @@ import java.util.UUID;
 public class CourseController {
 
     private final CourseService courseService;
+    private final AuthenticatedUserService authenticatedUserService;
 
     @PostMapping
     public ResponseEntity<CourseResponse> create(
             @Valid @RequestBody CreateCourseRequest request
     ) {
+
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
 
         var course =
                 courseService.create(
@@ -29,12 +35,15 @@ public class CourseController {
                         request.name(),
                         request.description(),
                         request.startDate(),
-                        request.endDate()
+                        request.endDate(),
+                        currentUser
                 );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(CourseResponse.from(course));
+                .body(
+                        CourseResponse.from(course)
+                );
     }
 
     @GetMapping("/{courseId}")
@@ -42,9 +51,15 @@ public class CourseController {
             @PathVariable UUID courseId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         return ResponseEntity.ok(
                 CourseResponse.from(
-                        courseService.findById(courseId)
+                        courseService.findById(
+                                courseId,
+                                currentUser
+                        )
                 )
         );
     }
@@ -54,9 +69,15 @@ public class CourseController {
             @PathVariable UUID institutionId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var courses =
                 courseService
-                        .findByInstitution(institutionId)
+                        .findByInstitution(
+                                institutionId,
+                                currentUser
+                        )
                         .stream()
                         .map(CourseResponse::from)
                         .toList();
@@ -69,9 +90,15 @@ public class CourseController {
             @PathVariable UUID courseId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         return ResponseEntity.ok(
                 CourseResponse.from(
-                        courseService.activate(courseId)
+                        courseService.activate(
+                                courseId,
+                                currentUser
+                        )
                 )
         );
     }
@@ -81,9 +108,15 @@ public class CourseController {
             @PathVariable UUID courseId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         return ResponseEntity.ok(
                 CourseResponse.from(
-                        courseService.complete(courseId)
+                        courseService.complete(
+                                courseId,
+                                currentUser
+                        )
                 )
         );
     }
@@ -93,9 +126,15 @@ public class CourseController {
             @PathVariable UUID courseId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         return ResponseEntity.ok(
                 CourseResponse.from(
-                        courseService.cancel(courseId)
+                        courseService.cancel(
+                                courseId,
+                                currentUser
+                        )
                 )
         );
     }
