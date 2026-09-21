@@ -66,6 +66,55 @@ public class PresenceEvidenceService {
         );
     }
     @Transactional
+    public PresenceEvidence registerMeetingSession(
+            User student,
+            ClassSession classSession,
+            Instant startedAt,
+            Instant endedAt,
+            String externalReference
+    ) {
+
+        validateStudent(
+                student.getId(),
+                classSession
+        );
+
+        PresenceEvidence evidence =
+                new PresenceEvidence();
+
+        evidence.setStudent(student);
+        evidence.setClassSession(classSession);
+        evidence.setSessionBlock(null);
+
+        evidence.setType(
+                PresenceEvidenceType.MEETING_SESSION
+        );
+
+        evidence.setSource(
+                EvidenceSource.GOOGLE_MEET
+        );
+
+        evidence.setOccurredAt(
+                startedAt
+        );
+
+        evidence.setEndedAt(
+                endedAt
+        );
+
+        evidence.setExternalReference(
+                externalReference
+        );
+
+        evidence.setDetails(
+                "Sessão de participação importada do Google Meet."
+        );
+
+        return presenceEvidenceRepository.save(
+                evidence
+        );
+    }
+    @Transactional
     public PresenceEvidence registerTeacherConfirmation(
             UUID studentId,
             UUID classSessionId,

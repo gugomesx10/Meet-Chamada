@@ -1,10 +1,12 @@
 package io.github.gugomesx10.meets.controller;
 
+import io.github.gugomesx10.meets.dto.googlemeet.GoogleMeetSyncResponse;
 import io.github.gugomesx10.meets.dto.googlemeet.LinkGoogleMeetRequest;
 import io.github.gugomesx10.meets.dto.session.ClassSessionResponse;
 import io.github.gugomesx10.meets.entity.User;
 import io.github.gugomesx10.meets.service.AuthenticatedUserService;
 import io.github.gugomesx10.meets.service.GoogleMeetClassSessionService;
+import io.github.gugomesx10.meets.service.GoogleMeetSyncService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
@@ -17,8 +19,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Profile("oauth")
 public class GoogleMeetClassSessionController {
-
     private final GoogleMeetClassSessionService googleMeetClassSessionService;
+    private final GoogleMeetSyncService googleMeetSyncService;
     private final AuthenticatedUserService authenticatedUserService;
 
     @PostMapping("/{classSessionId}/google-meet")
@@ -40,6 +42,22 @@ public class GoogleMeetClassSessionController {
         return ResponseEntity.ok(
                 ClassSessionResponse.from(
                         classSession
+                )
+        );
+    }
+
+    @PostMapping("/{classSessionId}/google-meet/sync")
+    public ResponseEntity<GoogleMeetSyncResponse> syncGoogleMeet(
+            @PathVariable UUID classSessionId
+    ) {
+
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
+        return ResponseEntity.ok(
+                googleMeetSyncService.sync(
+                        classSessionId,
+                        currentUser
                 )
         );
     }
