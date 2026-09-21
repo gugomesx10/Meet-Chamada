@@ -17,7 +17,6 @@ import io.github.gugomesx10.meets.repository.AttendanceDecisionRepository;
 import io.github.gugomesx10.meets.repository.AttendanceReviewRepository;
 import io.github.gugomesx10.meets.repository.CourseMembershipRepository;
 import io.github.gugomesx10.meets.repository.InstitutionMembershipRepository;
-import io.github.gugomesx10.meets.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,14 +29,13 @@ import java.util.UUID;
 public class AttendanceReviewService {
     private final AttendanceReviewRepository attendanceReviewRepository;
     private final AttendanceDecisionRepository attendanceDecisionRepository;
-    private final UserRepository userRepository;
     private final CourseMembershipRepository courseMembershipRepository;
     private final InstitutionMembershipRepository institutionMembershipRepository;
     private final AuditService auditService;
     @Transactional
     public AttendanceReview review(
             UUID attendanceDecisionId,
-            UUID reviewerId,
+            User reviewer,
             AttendanceStatus newStatus,
             String reason
     ) {
@@ -51,18 +49,10 @@ public class AttendanceReviewService {
                                 )
                         );
 
-        User reviewer =
-                userRepository
-                        .findById(reviewerId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Usuário responsável pela revisão não encontrado."
-                                )
-                        );
-
         validateNewStatus(newStatus);
 
         if (reason == null || reason.isBlank()) {
+
             throw new BusinessRuleException(
                     "O motivo da revisão é obrigatório."
             );
@@ -78,7 +68,7 @@ public class AttendanceReviewService {
 
         AttendanceDecisionSource source =
                 validateReviewerAndResolveSource(
-                        reviewerId,
+                        reviewer,
                         decision
                 );
 
@@ -86,6 +76,7 @@ public class AttendanceReviewService {
                 decision.getStatus();
 
         if (previousStatus == newStatus) {
+
             throw new ConflictException(
                     "O novo status deve ser diferente do status atual."
             );
@@ -158,6 +149,7 @@ public class AttendanceReviewService {
     ) {
 
         if (newStatus == null) {
+
             throw new BusinessRuleException(
                     "O novo status é obrigatório."
             );
@@ -175,9 +167,11 @@ public class AttendanceReviewService {
     }
 
     private AttendanceDecisionSource validateReviewerAndResolveSource(
-            UUID reviewerId,
+            User reviewer,
             AttendanceDecision decision
     ) {
+
+        UUID reviewerId = reviewer.getId();
 
         UUID courseId =
                 decision

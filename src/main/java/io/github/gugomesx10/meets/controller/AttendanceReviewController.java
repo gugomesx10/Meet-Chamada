@@ -2,7 +2,9 @@ package io.github.gugomesx10.meets.controller;
 
 import io.github.gugomesx10.meets.dto.attendance.AttendanceReviewResponse;
 import io.github.gugomesx10.meets.dto.attendance.ReviewAttendanceRequest;
+import io.github.gugomesx10.meets.entity.User;
 import io.github.gugomesx10.meets.service.AttendanceReviewService;
+import io.github.gugomesx10.meets.service.AuthenticatedUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,6 +19,7 @@ import java.util.UUID;
 public class AttendanceReviewController {
 
     private final AttendanceReviewService attendanceReviewService;
+    private final AuthenticatedUserService authenticatedUserService;
 
     @PostMapping("/{attendanceDecisionId}/reviews")
     public ResponseEntity<AttendanceReviewResponse> review(
@@ -24,16 +27,22 @@ public class AttendanceReviewController {
             @Valid @RequestBody ReviewAttendanceRequest request
     ) {
 
-        var review = attendanceReviewService.review(
-                attendanceDecisionId,
-                request.reviewerId(),
-                request.newStatus(),
-                request.reason()
-        );
+        User reviewer =
+                authenticatedUserService.getCurrentUser();
+
+        var review =
+                attendanceReviewService.review(
+                        attendanceDecisionId,
+                        reviewer,
+                        request.newStatus(),
+                        request.reason()
+                );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(AttendanceReviewResponse.from(review));
+                .body(
+                        AttendanceReviewResponse.from(review)
+                );
     }
 
     @GetMapping("/{attendanceDecisionId}/reviews")
@@ -41,11 +50,12 @@ public class AttendanceReviewController {
             @PathVariable UUID attendanceDecisionId
     ) {
 
-        var reviews = attendanceReviewService
-                .findHistory(attendanceDecisionId)
-                .stream()
-                .map(AttendanceReviewResponse::from)
-                .toList();
+        var reviews =
+                attendanceReviewService
+                        .findHistory(attendanceDecisionId)
+                        .stream()
+                        .map(AttendanceReviewResponse::from)
+                        .toList();
 
         return ResponseEntity.ok(reviews);
     }

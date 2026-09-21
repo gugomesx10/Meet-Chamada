@@ -50,6 +50,7 @@ class AttendanceReviewServiceTest {
 
     @Autowired
     private AttendanceReviewRepository attendanceReviewRepository;
+
     private Institution institution;
     private Course course;
     private ClassSession classSession;
@@ -64,7 +65,11 @@ class AttendanceReviewServiceTest {
 
         institution = new Institution();
         institution.setName("Escola da Nuvem");
-        institution = institutionRepository.save(institution);
+
+        institution =
+                institutionRepository.save(
+                        institution
+                );
 
         student = createUser(
                 "Gustavo",
@@ -87,6 +92,7 @@ class AttendanceReviewServiceTest {
         );
 
         course = new Course();
+
         course.setInstitution(institution);
         course.setName("AWS re/Start");
         course.setDescription(
@@ -96,9 +102,14 @@ class AttendanceReviewServiceTest {
         course.setEndDate(
                 LocalDate.now().plusMonths(3)
         );
-        course.setStatus(CourseStatus.ACTIVE);
+        course.setStatus(
+                CourseStatus.ACTIVE
+        );
 
-        course = courseRepository.save(course);
+        course =
+                courseRepository.save(
+                        course
+                );
 
         CourseMembership studentMembership =
                 new CourseMembership();
@@ -140,6 +151,7 @@ class AttendanceReviewServiceTest {
         );
 
         classSession = new ClassSession();
+
         classSession.setCourse(course);
         classSession.setTitle("Treinamento AWS");
         classSession.setSessionDate(LocalDate.now());
@@ -162,11 +174,9 @@ class AttendanceReviewServiceTest {
 
         decision.setStudent(student);
         decision.setClassSession(classSession);
-
         decision.setStatus(
                 AttendanceStatus.REVIEW_REQUIRED
         );
-
         decision.setDecisionSource(
                 AttendanceDecisionSource.SYSTEM
         );
@@ -183,12 +193,14 @@ class AttendanceReviewServiceTest {
         AttendanceReview review =
                 attendanceReviewService.review(
                         decision.getId(),
-                        instructor.getId(),
+                        instructor,
                         AttendanceStatus.CONFIRMED,
                         "Aluno acompanhou a aula e participou da atividade."
                 );
 
-        assertNotNull(review.getId());
+        assertNotNull(
+                review.getId()
+        );
 
         assertEquals(
                 AttendanceStatus.REVIEW_REQUIRED,
@@ -227,12 +239,14 @@ class AttendanceReviewServiceTest {
         AttendanceReview review =
                 attendanceReviewService.review(
                         decision.getId(),
-                        admin.getId(),
+                        admin,
                         AttendanceStatus.JUSTIFIED,
                         "Ausência justificada administrativamente."
                 );
 
-        assertNotNull(review.getId());
+        assertNotNull(
+                review.getId()
+        );
 
         AttendanceDecision updated =
                 attendanceDecisionRepository
@@ -262,7 +276,7 @@ class AttendanceReviewServiceTest {
                 ForbiddenOperationException.class,
                 () -> attendanceReviewService.review(
                         decision.getId(),
-                        student.getId(),
+                        student,
                         AttendanceStatus.CONFIRMED,
                         "Tentativa inválida."
                 )
@@ -276,7 +290,7 @@ class AttendanceReviewServiceTest {
                 ForbiddenOperationException.class,
                 () -> attendanceReviewService.review(
                         decision.getId(),
-                        outsider.getId(),
+                        outsider,
                         AttendanceStatus.CONFIRMED,
                         "Tentativa inválida."
                 )
@@ -290,7 +304,7 @@ class AttendanceReviewServiceTest {
                 BusinessRuleException.class,
                 () -> attendanceReviewService.review(
                         decision.getId(),
-                        instructor.getId(),
+                        instructor,
                         AttendanceStatus.CONFIRMED,
                         "   "
                 )
@@ -302,7 +316,7 @@ class AttendanceReviewServiceTest {
 
         attendanceReviewService.review(
                 decision.getId(),
-                instructor.getId(),
+                instructor,
                 AttendanceStatus.CONFIRMED,
                 "Presença confirmada pela professora."
         );
@@ -311,7 +325,7 @@ class AttendanceReviewServiceTest {
                 ConflictException.class,
                 () -> attendanceReviewService.review(
                         decision.getId(),
-                        instructor.getId(),
+                        instructor,
                         AttendanceStatus.CONFIRMED,
                         "Tentativa de aplicar novamente o mesmo status."
                 )
@@ -325,7 +339,7 @@ class AttendanceReviewServiceTest {
                 BusinessRuleException.class,
                 () -> attendanceReviewService.review(
                         decision.getId(),
-                        instructor.getId(),
+                        instructor,
                         AttendanceStatus.PENDING,
                         "Status inválido para revisão manual."
                 )
@@ -337,7 +351,7 @@ class AttendanceReviewServiceTest {
 
         attendanceReviewService.review(
                 decision.getId(),
-                instructor.getId(),
+                instructor,
                 AttendanceStatus.CONFIRMED,
                 "Presença confirmada pela professora."
         );
@@ -345,7 +359,7 @@ class AttendanceReviewServiceTest {
         AttendanceReview secondReview =
                 attendanceReviewService.review(
                         decision.getId(),
-                        admin.getId(),
+                        admin,
                         AttendanceStatus.JUSTIFIED,
                         "Status alterado após análise administrativa."
                 );
@@ -356,7 +370,10 @@ class AttendanceReviewServiceTest {
                                 decision.getId()
                         );
 
-        assertEquals(2, history.size());
+        assertEquals(
+                2,
+                history.size()
+        );
 
         assertEquals(
                 AttendanceStatus.REVIEW_REQUIRED,
