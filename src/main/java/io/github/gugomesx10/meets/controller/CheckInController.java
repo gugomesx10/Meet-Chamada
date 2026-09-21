@@ -13,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
@@ -31,14 +30,14 @@ public class CheckInController {
             @Valid @RequestBody OpenCheckInRequest request
     ) {
 
-        User openedBy =
+        User currentUser =
                 authenticatedUserService.getCurrentUser();
 
         CheckInWindow window =
                 checkInService.openCheckIn(
                         request.classSessionId(),
                         request.sessionBlockId(),
-                        openedBy,
+                        currentUser,
                         Duration.ofMinutes(
                                 request.durationMinutes()
                         )
@@ -47,7 +46,9 @@ public class CheckInController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(
-                        CheckInWindowResponse.from(window)
+                        CheckInWindowResponse.from(
+                                window
+                        )
                 );
     }
 
@@ -56,19 +57,21 @@ public class CheckInController {
             @PathVariable UUID checkInId
     ) {
 
-        User student =
+        User currentUser =
                 authenticatedUserService.getCurrentUser();
 
         CheckInResponse response =
                 checkInService.respond(
                         checkInId,
-                        student
+                        currentUser
                 );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(
-                        CheckInResponseDto.from(response)
+                        CheckInResponseDto.from(
+                                response
+                        )
                 );
     }
 
@@ -77,17 +80,19 @@ public class CheckInController {
             @PathVariable UUID checkInId
     ) {
 
-        User user =
+        User currentUser =
                 authenticatedUserService.getCurrentUser();
 
         CheckInWindow window =
                 checkInService.closeCheckIn(
                         checkInId,
-                        user
+                        currentUser
                 );
 
         return ResponseEntity.ok(
-                CheckInWindowResponse.from(window)
+                CheckInWindowResponse.from(
+                        window
+                )
         );
     }
 
@@ -96,17 +101,19 @@ public class CheckInController {
             @PathVariable UUID checkInId
     ) {
 
-        User user =
+        User currentUser =
                 authenticatedUserService.getCurrentUser();
 
         CheckInWindow window =
                 checkInService.cancelCheckIn(
                         checkInId,
-                        user
+                        currentUser
                 );
 
         return ResponseEntity.ok(
-                CheckInWindowResponse.from(window)
+                CheckInWindowResponse.from(
+                        window
+                )
         );
     }
 
@@ -115,14 +122,22 @@ public class CheckInController {
             @PathVariable UUID checkInId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         List<CheckInResponseDto> responses =
                 checkInService
-                        .findResponses(checkInId)
+                        .findResponses(
+                                checkInId,
+                                currentUser
+                        )
                         .stream()
                         .map(CheckInResponseDto::from)
                         .toList();
 
-        return ResponseEntity.ok(responses);
+        return ResponseEntity.ok(
+                responses
+        );
     }
 
     @GetMapping("/sessions/{classSessionId}")
@@ -130,13 +145,21 @@ public class CheckInController {
             @PathVariable UUID classSessionId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         List<CheckInWindowResponse> checkIns =
                 checkInService
-                        .findBySession(classSessionId)
+                        .findBySession(
+                                classSessionId,
+                                currentUser
+                        )
                         .stream()
                         .map(CheckInWindowResponse::from)
                         .toList();
 
-        return ResponseEntity.ok(checkIns);
+        return ResponseEntity.ok(
+                checkIns
+        );
     }
 }

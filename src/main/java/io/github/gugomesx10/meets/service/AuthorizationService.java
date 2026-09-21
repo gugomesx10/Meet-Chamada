@@ -16,6 +16,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class AuthorizationService {
+
     private final InstitutionMembershipRepository institutionMembershipRepository;
     private final CourseMembershipRepository courseMembershipRepository;
 
@@ -47,7 +48,8 @@ public class AuthorizationService {
                         institutionId
                 );
 
-        if (membership.getRole() != InstitutionRole.ADMIN) {
+        if (membership.getRole()
+                != InstitutionRole.ADMIN) {
 
             throw new ForbiddenOperationException(
                     "Somente um administrador da instituição pode executar esta operação."
@@ -84,7 +86,10 @@ public class AuthorizationService {
             Course course
     ) {
 
-        if (!hasCourseAccess(user, course)) {
+        if (!hasCourseAccess(
+                user,
+                course
+        )) {
 
             throw new ForbiddenOperationException(
                     "O usuário não possui acesso a este curso."
@@ -97,7 +102,7 @@ public class AuthorizationService {
             Course course
     ) {
 
-        var institutionMembership =
+        InstitutionMembership institutionMembership =
                 institutionMembershipRepository
                         .findByUserIdAndInstitutionId(
                                 user.getId(),
@@ -120,6 +125,39 @@ public class AuthorizationService {
                         user.getId(),
                         course.getId()
                 );
+    }
+
+    public CourseMembership requireCourseStudent(
+            User user,
+            Course course
+    ) {
+
+        requireInstitutionMember(
+                user,
+                course.getInstitution().getId()
+        );
+
+        CourseMembership membership =
+                courseMembershipRepository
+                        .findByUserIdAndCourseId(
+                                user.getId(),
+                                course.getId()
+                        )
+                        .orElseThrow(() ->
+                                new ForbiddenOperationException(
+                                        "O aluno não pertence a este curso."
+                                )
+                        );
+
+        if (membership.getRole()
+                != CourseRole.STUDENT) {
+
+            throw new ForbiddenOperationException(
+                    "O usuário autenticado não é aluno deste curso."
+            );
+        }
+
+        return membership;
     }
 
     public void requireCourseInstructorOrAdmin(
