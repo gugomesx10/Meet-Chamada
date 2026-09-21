@@ -23,12 +23,19 @@ public class InstitutionMembershipService {
     private final InstitutionMembershipRepository institutionMembershipRepository;
     private final InstitutionRepository institutionRepository;
     private final UserRepository userRepository;
+    private final AuthorizationService authorizationService;
     @Transactional
     public InstitutionMembership create(
             UUID institutionId,
             UUID userId,
-            InstitutionRole role
+            InstitutionRole role,
+            User currentUser
     ) {
+
+        authorizationService.requireInstitutionAdmin(
+                currentUser,
+                institutionId
+        );
 
         Institution institution =
                 institutionRepository
@@ -49,6 +56,7 @@ public class InstitutionMembershipService {
                         );
 
         if (role == null) {
+
             throw new BusinessRuleException(
                     "O papel do usuário na instituição é obrigatório."
             );
@@ -68,9 +76,17 @@ public class InstitutionMembershipService {
         InstitutionMembership membership =
                 new InstitutionMembership();
 
-        membership.setInstitution(institution);
-        membership.setUser(user);
-        membership.setRole(role);
+        membership.setInstitution(
+                institution
+        );
+
+        membership.setUser(
+                user
+        );
+
+        membership.setRole(
+                role
+        );
 
         return institutionMembershipRepository.save(
                 membership
@@ -79,8 +95,15 @@ public class InstitutionMembershipService {
     @Transactional(readOnly = true)
     public InstitutionMembership find(
             UUID institutionId,
-            UUID userId
+            UUID userId,
+            User currentUser
     ) {
+
+        authorizationService.requireInstitutionAdminOrSelf(
+                currentUser,
+                institutionId,
+                userId
+        );
 
         return institutionMembershipRepository
                 .findByUserIdAndInstitutionId(
@@ -95,30 +118,46 @@ public class InstitutionMembershipService {
     }
     @Transactional(readOnly = true)
     public List<InstitutionMembership> findByInstitution(
-            UUID institutionId
+            UUID institutionId,
+            User currentUser
     ) {
 
-        if (!institutionRepository.existsById(institutionId)) {
+        if (!institutionRepository.existsById(
+                institutionId
+        )) {
+
             throw new ResourceNotFoundException(
                     "Instituição não encontrada."
             );
         }
 
+        authorizationService.requireInstitutionAdmin(
+                currentUser,
+                institutionId
+        );
+
         return institutionMembershipRepository
-                .findAllByInstitutionId(institutionId);
+                .findAllByInstitutionId(
+                        institutionId
+                );
     }
     @Transactional(readOnly = true)
     public List<InstitutionMembership> findByUser(
             UUID userId
     ) {
 
-        if (!userRepository.existsById(userId)) {
+        if (!userRepository.existsById(
+                userId
+        )) {
+
             throw new ResourceNotFoundException(
                     "Usuário não encontrado."
             );
         }
 
         return institutionMembershipRepository
-                .findAllByUserId(userId);
+                .findAllByUserId(
+                        userId
+                );
     }
 }

@@ -2,6 +2,8 @@ package io.github.gugomesx10.meets.controller;
 
 import io.github.gugomesx10.meets.dto.institution.CreateInstitutionRequest;
 import io.github.gugomesx10.meets.dto.institution.InstitutionResponse;
+import io.github.gugomesx10.meets.entity.User;
+import io.github.gugomesx10.meets.service.AuthenticatedUserService;
 import io.github.gugomesx10.meets.service.InstitutionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,15 +19,20 @@ import java.util.UUID;
 public class InstitutionController {
 
     private final InstitutionService institutionService;
+    private final AuthenticatedUserService authenticatedUserService;
 
     @PostMapping
     public ResponseEntity<InstitutionResponse> create(
             @Valid @RequestBody CreateInstitutionRequest request
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var institution =
                 institutionService.create(
-                        request.name()
+                        request.name(),
+                        currentUser
                 );
 
         return ResponseEntity
@@ -42,10 +49,14 @@ public class InstitutionController {
             @PathVariable UUID institutionId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         return ResponseEntity.ok(
                 InstitutionResponse.from(
                         institutionService.findById(
-                                institutionId
+                                institutionId,
+                                currentUser
                         )
                 )
         );
@@ -54,13 +65,18 @@ public class InstitutionController {
     @GetMapping
     public ResponseEntity<List<InstitutionResponse>> findAll() {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var institutions =
                 institutionService
-                        .findAll()
+                        .findAllByUser(currentUser)
                         .stream()
                         .map(InstitutionResponse::from)
                         .toList();
 
-        return ResponseEntity.ok(institutions);
+        return ResponseEntity.ok(
+                institutions
+        );
     }
 }

@@ -2,6 +2,8 @@ package io.github.gugomesx10.meets.controller;
 
 import io.github.gugomesx10.meets.dto.membership.CreateInstitutionMembershipRequest;
 import io.github.gugomesx10.meets.dto.membership.InstitutionMembershipResponse;
+import io.github.gugomesx10.meets.entity.User;
+import io.github.gugomesx10.meets.service.AuthenticatedUserService;
 import io.github.gugomesx10.meets.service.InstitutionMembershipService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ import java.util.UUID;
 public class InstitutionMembershipController {
 
     private final InstitutionMembershipService institutionMembershipService;
+    private final AuthenticatedUserService authenticatedUserService;
 
     @PostMapping("/{institutionId}/memberships")
     public ResponseEntity<InstitutionMembershipResponse> create(
@@ -24,16 +27,24 @@ public class InstitutionMembershipController {
             @Valid @RequestBody CreateInstitutionMembershipRequest request
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var membership =
                 institutionMembershipService.create(
                         institutionId,
                         request.userId(),
-                        request.role()
+                        request.role(),
+                        currentUser
                 );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(InstitutionMembershipResponse.from(membership));
+                .body(
+                        InstitutionMembershipResponse.from(
+                                membership
+                        )
+                );
     }
 
     @GetMapping("/{institutionId}/memberships")
@@ -41,14 +52,22 @@ public class InstitutionMembershipController {
             @PathVariable UUID institutionId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var memberships =
                 institutionMembershipService
-                        .findByInstitution(institutionId)
+                        .findByInstitution(
+                                institutionId,
+                                currentUser
+                        )
                         .stream()
                         .map(InstitutionMembershipResponse::from)
                         .toList();
 
-        return ResponseEntity.ok(memberships);
+        return ResponseEntity.ok(
+                memberships
+        );
     }
 
     @GetMapping("/{institutionId}/memberships/{userId}")
@@ -57,14 +76,20 @@ public class InstitutionMembershipController {
             @PathVariable UUID userId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var membership =
                 institutionMembershipService.find(
                         institutionId,
-                        userId
+                        userId,
+                        currentUser
                 );
 
         return ResponseEntity.ok(
-                InstitutionMembershipResponse.from(membership)
+                InstitutionMembershipResponse.from(
+                        membership
+                )
         );
     }
 }
