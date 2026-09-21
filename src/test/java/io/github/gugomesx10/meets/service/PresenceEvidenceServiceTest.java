@@ -65,7 +65,9 @@ class PresenceEvidenceServiceTest {
     void setUp() {
 
         institution = new Institution();
-        institution.setName("Escola da Nuvem");
+        institution.setName(
+                "Escola da Nuvem"
+        );
 
         institution =
                 institutionRepository.save(
@@ -92,63 +94,63 @@ class PresenceEvidenceServiceTest {
                 "externo@teste.com"
         );
 
+        createInstitutionMembership(
+                instructor,
+                InstitutionRole.TEACHER
+        );
+
+        createInstitutionMembership(
+                student,
+                InstitutionRole.STUDENT
+        );
+
+        createInstitutionMembership(
+                admin,
+                InstitutionRole.ADMIN
+        );
+
         course = new Course();
 
         course.setInstitution(institution);
         course.setName("AWS re/Start");
-        course.setDescription("Treinamento AWS");
-        course.setStartDate(LocalDate.now());
+        course.setDescription(
+                "Treinamento AWS"
+        );
+        course.setStartDate(
+                LocalDate.now()
+        );
         course.setEndDate(
                 LocalDate.now().plusMonths(3)
         );
-        course.setStatus(CourseStatus.ACTIVE);
+        course.setStatus(
+                CourseStatus.ACTIVE
+        );
 
-        course = courseRepository.save(course);
+        course =
+                courseRepository.save(
+                        course
+                );
 
-        CourseMembership instructorMembership =
-                new CourseMembership();
-
-        instructorMembership.setCourse(course);
-        instructorMembership.setUser(instructor);
-        instructorMembership.setRole(
+        createCourseMembership(
+                instructor,
                 CourseRole.INSTRUCTOR
         );
 
-        courseMembershipRepository.save(
-                instructorMembership
-        );
-
-        CourseMembership studentMembership =
-                new CourseMembership();
-
-        studentMembership.setCourse(course);
-        studentMembership.setUser(student);
-        studentMembership.setRole(
+        createCourseMembership(
+                student,
                 CourseRole.STUDENT
         );
 
-        courseMembershipRepository.save(
-                studentMembership
-        );
-
-        InstitutionMembership adminMembership =
-                new InstitutionMembership();
-
-        adminMembership.setInstitution(institution);
-        adminMembership.setUser(admin);
-        adminMembership.setRole(
-                InstitutionRole.ADMIN
-        );
-
-        institutionMembershipRepository.save(
-                adminMembership
-        );
-
-        classSession = new ClassSession();
+        classSession =
+                new ClassSession();
 
         classSession.setCourse(course);
-        classSession.setTitle("Aula AWS");
-        classSession.setSessionDate(LocalDate.now());
+        classSession.setTitle(
+                "Aula AWS"
+        );
+        classSession.setSessionDate(
+                LocalDate.now()
+        );
         classSession.setStartTime(
                 LocalTime.of(9, 0)
         );
@@ -178,7 +180,9 @@ class PresenceEvidenceServiceTest {
                                 "Aluno participou da atividade."
                         );
 
-        assertNotNull(evidence.getId());
+        assertNotNull(
+                evidence.getId()
+        );
 
         assertEquals(
                 student.getId(),
@@ -195,7 +199,9 @@ class PresenceEvidenceServiceTest {
                 evidence.getSource()
         );
 
-        assertNotNull(evidence.getOccurredAt());
+        assertNotNull(
+                evidence.getOccurredAt()
+        );
     }
 
     @Test
@@ -211,7 +217,9 @@ class PresenceEvidenceServiceTest {
                                 "Presença confirmada administrativamente."
                         );
 
-        assertNotNull(evidence.getId());
+        assertNotNull(
+                evidence.getId()
+        );
 
         assertEquals(
                 PresenceEvidenceType.TEACHER_CONFIRMATION,
@@ -279,6 +287,7 @@ class PresenceEvidenceServiceTest {
                 new ClassSession();
 
         anotherSession.setCourse(course);
+
         anotherSession.setTitle(
                 "Outra aula AWS"
         );
@@ -307,20 +316,30 @@ class PresenceEvidenceServiceTest {
         SessionBlock block =
                 new SessionBlock();
 
-        block.setClassSession(anotherSession);
-        block.setInstructor(instructor);
+        block.setClassSession(
+                anotherSession
+        );
+
+        block.setInstructor(
+                instructor
+        );
+
         block.setTitle(
                 "Fundamentos de Cloud"
         );
+
         block.setDescription(
                 "Bloco pertencente a outra sessão."
         );
+
         block.setType(
                 SessionBlockType.TECHNICAL
         );
+
         block.setStartTime(
                 LocalTime.of(9, 0)
         );
+
         block.setEndTime(
                 LocalTime.of(10, 0)
         );
@@ -330,7 +349,8 @@ class PresenceEvidenceServiceTest {
                         block
                 );
 
-        SessionBlock savedBlock = block;
+        SessionBlock savedBlock =
+                block;
 
         assertThrows(
                 BusinessRuleException.class,
@@ -351,18 +371,30 @@ class PresenceEvidenceServiceTest {
         SessionBlock block =
                 new SessionBlock();
 
-        block.setClassSession(classSession);
-        block.setInstructor(instructor);
-        block.setTitle("Treinamento AWS");
+        block.setClassSession(
+                classSession
+        );
+
+        block.setInstructor(
+                instructor
+        );
+
+        block.setTitle(
+                "Treinamento AWS"
+        );
+
         block.setDescription(
                 "Bloco técnico da aula."
         );
+
         block.setType(
                 SessionBlockType.TECHNICAL
         );
+
         block.setStartTime(
                 LocalTime.of(10, 30)
         );
+
         block.setEndTime(
                 LocalTime.of(12, 0)
         );
@@ -412,7 +444,10 @@ class PresenceEvidenceServiceTest {
                                 evidence.getId()
                         );
 
-        assertEquals(1, events.size());
+        assertEquals(
+                1,
+                events.size()
+        );
 
         AuditEvent event =
                 events.getFirst();
@@ -474,16 +509,168 @@ class PresenceEvidenceServiceTest {
         );
     }
 
+    @Test
+    void alunoDeveConsultarPropriasEvidencias() {
+
+        PresenceEvidence evidence =
+                presenceEvidenceService
+                        .registerTeacherConfirmation(
+                                student.getId(),
+                                classSession.getId(),
+                                null,
+                                instructor,
+                                "Participação confirmada."
+                        );
+
+        var evidences =
+                presenceEvidenceService
+                        .findByStudentAndSession(
+                                student.getId(),
+                                classSession.getId(),
+                                student
+                        );
+
+        assertEquals(
+                1,
+                evidences.size()
+        );
+
+        assertEquals(
+                evidence.getId(),
+                evidences.getFirst().getId()
+        );
+    }
+
+    @Test
+    void instrutorDeveListarEvidenciasDaSessao() {
+
+        presenceEvidenceService
+                .registerTeacherConfirmation(
+                        student.getId(),
+                        classSession.getId(),
+                        null,
+                        instructor,
+                        "Participação confirmada."
+                );
+
+        var evidences =
+                presenceEvidenceService.findBySession(
+                        classSession.getId(),
+                        instructor
+                );
+
+        assertEquals(
+                1,
+                evidences.size()
+        );
+    }
+
+    @Test
+    void alunoNaoDeveListarEvidenciasDaSessaoInteira() {
+
+        presenceEvidenceService
+                .registerTeacherConfirmation(
+                        student.getId(),
+                        classSession.getId(),
+                        null,
+                        instructor,
+                        "Participação confirmada."
+                );
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> presenceEvidenceService.findBySession(
+                        classSession.getId(),
+                        student
+                )
+        );
+    }
+
+    @Test
+    void usuarioSemVinculoNaoDeveConsultarEvidenciasDoAluno() {
+
+        presenceEvidenceService
+                .registerTeacherConfirmation(
+                        student.getId(),
+                        classSession.getId(),
+                        null,
+                        instructor,
+                        "Participação confirmada."
+                );
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> presenceEvidenceService.findByStudentAndSession(
+                        student.getId(),
+                        classSession.getId(),
+                        outsider
+                )
+        );
+    }
+
     private User createUser(
             String name,
             String email
     ) {
 
-        User user = new User();
+        User user =
+                new User();
 
         user.setName(name);
         user.setEmail(email);
 
-        return userRepository.save(user);
+        return userRepository.save(
+                user
+        );
+    }
+
+    private InstitutionMembership createInstitutionMembership(
+            User user,
+            InstitutionRole role
+    ) {
+
+        InstitutionMembership membership =
+                new InstitutionMembership();
+
+        membership.setInstitution(
+                institution
+        );
+
+        membership.setUser(
+                user
+        );
+
+        membership.setRole(
+                role
+        );
+
+        return institutionMembershipRepository.save(
+                membership
+        );
+    }
+
+    private CourseMembership createCourseMembership(
+            User user,
+            CourseRole role
+    ) {
+
+        CourseMembership membership =
+                new CourseMembership();
+
+        membership.setCourse(
+                course
+        );
+
+        membership.setUser(
+                user
+        );
+
+        membership.setRole(
+                role
+        );
+
+        return courseMembershipRepository.save(
+                membership
+        );
     }
 }

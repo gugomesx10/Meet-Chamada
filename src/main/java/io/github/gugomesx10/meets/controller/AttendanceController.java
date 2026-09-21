@@ -1,7 +1,9 @@
 package io.github.gugomesx10.meets.controller;
 
 import io.github.gugomesx10.meets.dto.attendance.AttendanceDecisionResponse;
+import io.github.gugomesx10.meets.entity.User;
 import io.github.gugomesx10.meets.service.AttendanceService;
+import io.github.gugomesx10.meets.service.AuthenticatedUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,6 +16,7 @@ import java.util.UUID;
 public class AttendanceController {
 
     private final AttendanceService attendanceService;
+    private final AuthenticatedUserService authenticatedUserService;
 
     @PostMapping(
             "/sessions/{classSessionId}/students/{studentId}/evaluate"
@@ -23,13 +26,20 @@ public class AttendanceController {
             @PathVariable UUID studentId
     ) {
 
-        var decision = attendanceService.evaluate(
-                studentId,
-                classSessionId
-        );
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
+        var decision =
+                attendanceService.evaluate(
+                        studentId,
+                        classSessionId,
+                        currentUser
+                );
 
         return ResponseEntity.ok(
-                AttendanceDecisionResponse.from(decision)
+                AttendanceDecisionResponse.from(
+                        decision
+                )
         );
     }
 
@@ -38,13 +48,22 @@ public class AttendanceController {
             @PathVariable UUID classSessionId
     ) {
 
-        var decisions = attendanceService
-                .evaluateSession(classSessionId)
-                .stream()
-                .map(AttendanceDecisionResponse::from)
-                .toList();
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
 
-        return ResponseEntity.ok(decisions);
+        var decisions =
+                attendanceService
+                        .evaluateSession(
+                                classSessionId,
+                                currentUser
+                        )
+                        .stream()
+                        .map(AttendanceDecisionResponse::from)
+                        .toList();
+
+        return ResponseEntity.ok(
+                decisions
+        );
     }
 
     @GetMapping(
@@ -55,14 +74,20 @@ public class AttendanceController {
             @PathVariable UUID studentId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var decision =
                 attendanceService.findByStudentAndSession(
                         studentId,
-                        classSessionId
+                        classSessionId,
+                        currentUser
                 );
 
         return ResponseEntity.ok(
-                AttendanceDecisionResponse.from(decision)
+                AttendanceDecisionResponse.from(
+                        decision
+                )
         );
     }
 
@@ -71,13 +96,22 @@ public class AttendanceController {
             @PathVariable UUID classSessionId
     ) {
 
-        var decisions = attendanceService
-                .findBySession(classSessionId)
-                .stream()
-                .map(AttendanceDecisionResponse::from)
-                .toList();
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
 
-        return ResponseEntity.ok(decisions);
+        var decisions =
+                attendanceService
+                        .findBySession(
+                                classSessionId,
+                                currentUser
+                        )
+                        .stream()
+                        .map(AttendanceDecisionResponse::from)
+                        .toList();
+
+        return ResponseEntity.ok(
+                decisions
+        );
     }
 
     @GetMapping(
@@ -88,12 +122,21 @@ public class AttendanceController {
             @PathVariable UUID classSessionId
     ) {
 
-        var decisions = attendanceService
-                .findReviewRequired(classSessionId)
-                .stream()
-                .map(AttendanceDecisionResponse::from)
-                .toList();
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
 
-        return ResponseEntity.ok(decisions);
+        var decisions =
+                attendanceService
+                        .findReviewRequired(
+                                classSessionId,
+                                currentUser
+                        )
+                        .stream()
+                        .map(AttendanceDecisionResponse::from)
+                        .toList();
+
+        return ResponseEntity.ok(
+                decisions
+        );
     }
 }

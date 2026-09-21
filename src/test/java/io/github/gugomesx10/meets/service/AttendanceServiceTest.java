@@ -3,6 +3,7 @@ package io.github.gugomesx10.meets.service;
 import io.github.gugomesx10.meets.TestcontainersConfiguration;
 import io.github.gugomesx10.meets.entity.*;
 import io.github.gugomesx10.meets.entity.enums.*;
+import io.github.gugomesx10.meets.exception.ForbiddenOperationException;
 import io.github.gugomesx10.meets.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -31,6 +33,9 @@ class AttendanceServiceTest {
     private InstitutionRepository institutionRepository;
 
     @Autowired
+    private InstitutionMembershipRepository institutionMembershipRepository;
+
+    @Autowired
     private CourseRepository courseRepository;
 
     @Autowired
@@ -45,6 +50,7 @@ class AttendanceServiceTest {
     @Autowired
     private AttendanceDecisionRepository attendanceDecisionRepository;
 
+    private Institution institution;
     private User student;
     private User instructor;
     private ClassSession classSession;
@@ -52,10 +58,12 @@ class AttendanceServiceTest {
     @BeforeEach
     void setUp() {
 
-        Institution institution =
+        institution =
                 new Institution();
 
-        institution.setName("Escola da Nuvem");
+        institution.setName(
+                "Escola da Nuvem"
+        );
 
         institution =
                 institutionRepository.save(
@@ -70,6 +78,16 @@ class AttendanceServiceTest {
         instructor = createUser(
                 "Professora",
                 "professora@teste.com"
+        );
+
+        createInstitutionMembership(
+                student,
+                InstitutionRole.STUDENT
+        );
+
+        createInstitutionMembership(
+                instructor,
+                InstitutionRole.TEACHER
         );
 
         Course course =
@@ -91,39 +109,29 @@ class AttendanceServiceTest {
         );
 
         course =
-                courseRepository.save(course);
+                courseRepository.save(
+                        course
+                );
 
-        CourseMembership studentMembership =
-                new CourseMembership();
-
-        studentMembership.setCourse(course);
-        studentMembership.setUser(student);
-        studentMembership.setRole(
+        createCourseMembership(
+                course,
+                student,
                 CourseRole.STUDENT
         );
 
-        courseMembershipRepository.save(
-                studentMembership
-        );
-
-        CourseMembership instructorMembership =
-                new CourseMembership();
-
-        instructorMembership.setCourse(course);
-        instructorMembership.setUser(instructor);
-        instructorMembership.setRole(
+        createCourseMembership(
+                course,
+                instructor,
                 CourseRole.INSTRUCTOR
-        );
-
-        courseMembershipRepository.save(
-                instructorMembership
         );
 
         classSession =
                 new ClassSession();
 
         classSession.setCourse(course);
-        classSession.setTitle("Aula AWS");
+        classSession.setTitle(
+                "Aula AWS"
+        );
         classSession.setSessionDate(
                 LocalDate.now()
         );
@@ -157,7 +165,8 @@ class AttendanceServiceTest {
         AttendanceDecision decision =
                 attendanceService.evaluate(
                         student.getId(),
-                        classSession.getId()
+                        classSession.getId(),
+                        instructor
                 );
 
         assertEquals(
@@ -172,7 +181,8 @@ class AttendanceServiceTest {
         AttendanceDecision decision =
                 attendanceService.evaluate(
                         student.getId(),
-                        classSession.getId()
+                        classSession.getId(),
+                        instructor
                 );
 
         assertEquals(
@@ -192,7 +202,8 @@ class AttendanceServiceTest {
         AttendanceDecision decision =
                 attendanceService.evaluate(
                         student.getId(),
-                        classSession.getId()
+                        classSession.getId(),
+                        instructor
                 );
 
         assertEquals(
@@ -217,7 +228,8 @@ class AttendanceServiceTest {
         AttendanceDecision decision =
                 attendanceService.evaluate(
                         student.getId(),
-                        classSession.getId()
+                        classSession.getId(),
+                        instructor
                 );
 
         assertEquals(
@@ -242,7 +254,8 @@ class AttendanceServiceTest {
         AttendanceDecision decision =
                 attendanceService.evaluate(
                         student.getId(),
-                        classSession.getId()
+                        classSession.getId(),
+                        instructor
                 );
 
         assertEquals(
@@ -262,7 +275,8 @@ class AttendanceServiceTest {
         AttendanceDecision decision =
                 attendanceService.evaluate(
                         student.getId(),
-                        classSession.getId()
+                        classSession.getId(),
+                        instructor
                 );
 
         assertEquals(
@@ -282,7 +296,8 @@ class AttendanceServiceTest {
         AttendanceDecision decision =
                 attendanceService.evaluate(
                         student.getId(),
-                        classSession.getId()
+                        classSession.getId(),
+                        instructor
                 );
 
         assertEquals(
@@ -321,7 +336,8 @@ class AttendanceServiceTest {
         AttendanceDecision result =
                 attendanceService.evaluate(
                         student.getId(),
-                        classSession.getId()
+                        classSession.getId(),
+                        instructor
                 );
 
         assertEquals(
@@ -337,6 +353,65 @@ class AttendanceServiceTest {
         assertEquals(
                 AttendanceDecisionSource.TEACHER,
                 result.getDecisionSource()
+        );
+    }
+
+    @Test
+    void alunoNaoDeveAvaliarPropriaPresenca() {
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> attendanceService.evaluate(
+                        student.getId(),
+                        classSession.getId(),
+                        student
+                )
+        );
+    }
+
+    @Test
+    void alunoDeveConsultarPropriaPresenca() {
+
+        AttendanceDecision created =
+                attendanceService.evaluate(
+                        student.getId(),
+                        classSession.getId(),
+                        instructor
+                );
+
+        AttendanceDecision found =
+                attendanceService.findByStudentAndSession(
+                        student.getId(),
+                        classSession.getId(),
+                        student
+                );
+
+        assertEquals(
+                created.getId(),
+                found.getId()
+        );
+
+        assertEquals(
+                student.getId(),
+                found.getStudent().getId()
+        );
+    }
+
+    @Test
+    void alunoNaoDeveListarPresencasDaTurma() {
+
+        attendanceService.evaluate(
+                student.getId(),
+                classSession.getId(),
+                instructor
+        );
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> attendanceService.findBySession(
+                        classSession.getId(),
+                        student
+                )
         );
     }
 
@@ -366,11 +441,65 @@ class AttendanceServiceTest {
             String email
     ) {
 
-        User user = new User();
+        User user =
+                new User();
 
         user.setName(name);
         user.setEmail(email);
 
-        return userRepository.save(user);
+        return userRepository.save(
+                user
+        );
+    }
+
+    private InstitutionMembership createInstitutionMembership(
+            User user,
+            InstitutionRole role
+    ) {
+
+        InstitutionMembership membership =
+                new InstitutionMembership();
+
+        membership.setInstitution(
+                institution
+        );
+
+        membership.setUser(
+                user
+        );
+
+        membership.setRole(
+                role
+        );
+
+        return institutionMembershipRepository.save(
+                membership
+        );
+    }
+
+    private CourseMembership createCourseMembership(
+            Course course,
+            User user,
+            CourseRole role
+    ) {
+
+        CourseMembership membership =
+                new CourseMembership();
+
+        membership.setCourse(
+                course
+        );
+
+        membership.setUser(
+                user
+        );
+
+        membership.setRole(
+                role
+        );
+
+        return courseMembershipRepository.save(
+                membership
+        );
     }
 }

@@ -48,10 +48,152 @@ public class AttendanceService {
     private final ClassSessionRepository classSessionRepository;
     private final CourseMembershipRepository courseMembershipRepository;
     private final AuditService auditService;
+    private final AuthorizationService authorizationService;
+
     @Transactional
     public AttendanceDecision evaluate(
             UUID studentId,
-            UUID classSessionId
+            UUID classSessionId,
+            User currentUser
+    ) {
+
+        ClassSession classSession =
+                findClassSession(
+                        classSessionId
+                );
+
+        authorizationService
+                .requireCourseInstructorOrAdmin(
+                        currentUser,
+                        classSession.getCourse()
+                );
+
+        return evaluateInternal(
+                studentId,
+                classSession
+        );
+    }
+    @Transactional
+    public List<AttendanceDecision> evaluateSession(
+            UUID classSessionId,
+            User currentUser
+    ) {
+
+        ClassSession classSession =
+                findClassSession(
+                        classSessionId
+                );
+
+        authorizationService
+                .requireCourseInstructorOrAdmin(
+                        currentUser,
+                        classSession.getCourse()
+                );
+
+        return courseMembershipRepository
+                .findAllByCourseId(
+                        classSession
+                                .getCourse()
+                                .getId()
+                )
+                .stream()
+                .filter(membership ->
+                        membership.getRole()
+                                == CourseRole.STUDENT
+                )
+                .map(CourseMembership::getUser)
+                .map(student ->
+                        evaluateInternal(
+                                student.getId(),
+                                classSession
+                        )
+                )
+                .toList();
+    }
+    @Transactional(readOnly = true)
+    public AttendanceDecision findByStudentAndSession(
+            UUID studentId,
+            UUID classSessionId,
+            User currentUser
+    ) {
+
+        ClassSession classSession =
+                findClassSession(
+                        classSessionId
+                );
+
+        validateStudent(
+                studentId,
+                classSession
+        );
+
+        authorizationService
+                .requireCourseInstructorOrAdminOrSelf(
+                        currentUser,
+                        classSession.getCourse(),
+                        studentId
+                );
+
+        return attendanceDecisionRepository
+                .findByStudentIdAndClassSessionId(
+                        studentId,
+                        classSessionId
+                )
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Decisão de presença não encontrada."
+                        )
+                );
+    }
+    @Transactional(readOnly = true)
+    public List<AttendanceDecision> findBySession(
+            UUID classSessionId,
+            User currentUser
+    ) {
+
+        ClassSession classSession =
+                findClassSession(
+                        classSessionId
+                );
+
+        authorizationService
+                .requireCourseInstructorOrAdmin(
+                        currentUser,
+                        classSession.getCourse()
+                );
+
+        return attendanceDecisionRepository
+                .findAllByClassSessionId(
+                        classSessionId
+                );
+    }
+    @Transactional(readOnly = true)
+    public List<AttendanceDecision> findReviewRequired(
+            UUID classSessionId,
+            User currentUser
+    ) {
+
+        ClassSession classSession =
+                findClassSession(
+                        classSessionId
+                );
+
+        authorizationService
+                .requireCourseInstructorOrAdmin(
+                        currentUser,
+                        classSession.getCourse()
+                );
+
+        return attendanceDecisionRepository
+                .findAllByClassSessionIdAndStatus(
+                        classSessionId,
+                        AttendanceStatus.REVIEW_REQUIRED
+                );
+    }
+
+    private AttendanceDecision evaluateInternal(
+            UUID studentId,
+            ClassSession classSession
     ) {
 
         User student =
@@ -63,19 +205,13 @@ public class AttendanceService {
                                 )
                         );
 
-        ClassSession classSession =
-                classSessionRepository
-                        .findById(classSessionId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Sessão de aula não encontrada."
-                                )
-                        );
-
         validateStudent(
                 studentId,
                 classSession
         );
+
+        UUID classSessionId =
+                classSession.getId();
 
         AttendanceDecision decision =
                 attendanceDecisionRepository
@@ -89,6 +225,7 @@ public class AttendanceService {
                                     new AttendanceDecision();
 
                             created.setStudent(student);
+
                             created.setClassSession(
                                     classSession
                             );
@@ -161,7 +298,8 @@ public class AttendanceService {
 
         if (teacherConfirmation) {
 
-            status = AttendanceStatus.CONFIRMED;
+            status =
+                    AttendanceStatus.CONFIRMED;
 
             reason =
                     "Presença confirmada manualmente pelo professor.";
@@ -169,14 +307,16 @@ public class AttendanceService {
         } else if (meetingSession
                 && activeEvidenceCount >= 1) {
 
-            status = AttendanceStatus.CONFIRMED;
+            status =
+                    AttendanceStatus.CONFIRMED;
 
             reason =
                     "Participação confirmada por conexão à aula e evidência ativa.";
 
         } else if (activeEvidenceCount >= 2) {
 
-            status = AttendanceStatus.CONFIRMED;
+            status =
+                    AttendanceStatus.CONFIRMED;
 
             reason =
                     "Participação confirmada por múltiplas evidências ativas.";
@@ -199,18 +339,21 @@ public class AttendanceService {
 
         } else {
 
-            status = AttendanceStatus.ABSENT;
+            status =
+                    AttendanceStatus.ABSENT;
 
             reason =
                     "Nenhuma evidência de presença ou participação foi encontrada.";
         }
 
         decision.setStatus(status);
+
         decision.setDecisionSource(
                 AttendanceDecisionSource.SYSTEM
         );
 
         decision.setDecidedBy(null);
+
         decision.setDecidedAt(
                 Instant.now()
         );
@@ -233,94 +376,17 @@ public class AttendanceService {
 
         return saved;
     }
-    @Transactional
-    public List<AttendanceDecision> evaluateSession(
+
+    private ClassSession findClassSession(
             UUID classSessionId
     ) {
 
-        ClassSession classSession =
-                classSessionRepository
-                        .findById(classSessionId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Sessão de aula não encontrada."
-                                )
-                        );
-
-        return courseMembershipRepository
-                .findAllByCourseId(
-                        classSession
-                                .getCourse()
-                                .getId()
-                )
-                .stream()
-                .filter(membership ->
-                        membership.getRole()
-                                == CourseRole.STUDENT
-                )
-                .map(CourseMembership::getUser)
-                .map(student ->
-                        evaluate(
-                                student.getId(),
-                                classSessionId
-                        )
-                )
-                .toList();
-    }
-    @Transactional(readOnly = true)
-    public AttendanceDecision findByStudentAndSession(
-            UUID studentId,
-            UUID classSessionId
-    ) {
-
-        return attendanceDecisionRepository
-                .findByStudentIdAndClassSessionId(
-                        studentId,
-                        classSessionId
-                )
+        return classSessionRepository
+                .findById(classSessionId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Decisão de presença não encontrada."
+                                "Sessão de aula não encontrada."
                         )
-                );
-    }
-    @Transactional(readOnly = true)
-    public List<AttendanceDecision> findBySession(
-            UUID classSessionId
-    ) {
-
-        if (!classSessionRepository.existsById(
-                classSessionId
-        )) {
-
-            throw new ResourceNotFoundException(
-                    "Sessão de aula não encontrada."
-            );
-        }
-
-        return attendanceDecisionRepository
-                .findAllByClassSessionId(
-                        classSessionId
-                );
-    }
-    @Transactional(readOnly = true)
-    public List<AttendanceDecision> findReviewRequired(
-            UUID classSessionId
-    ) {
-
-        if (!classSessionRepository.existsById(
-                classSessionId
-        )) {
-
-            throw new ResourceNotFoundException(
-                    "Sessão de aula não encontrada."
-            );
-        }
-
-        return attendanceDecisionRepository
-                .findAllByClassSessionIdAndStatus(
-                        classSessionId,
-                        AttendanceStatus.REVIEW_REQUIRED
                 );
     }
 

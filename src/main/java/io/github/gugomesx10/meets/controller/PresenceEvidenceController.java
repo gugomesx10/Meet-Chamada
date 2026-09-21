@@ -9,7 +9,6 @@ import io.github.gugomesx10.meets.service.AuthenticatedUserService;
 import io.github.gugomesx10.meets.service.PresenceEvidenceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -29,7 +28,8 @@ public class PresenceEvidenceController {
             @Valid @RequestBody TeacherConfirmationRequest request
     ) {
 
-        User teacher = authenticatedUserService.getCurrentUser();
+        User teacher =
+                authenticatedUserService.getCurrentUser();
 
         PresenceEvidence evidence =
                 presenceEvidenceService.registerTeacherConfirmation(
@@ -41,25 +41,34 @@ public class PresenceEvidenceController {
                 );
 
         return ResponseEntity.ok(
-                PresenceEvidenceResponse.from(evidence)
+                PresenceEvidenceResponse.from(
+                        evidence
+                )
         );
     }
 
-    @GetMapping(
-            "/sessions/{classSessionId}"
-    )
+    @GetMapping("/sessions/{classSessionId}")
     public ResponseEntity<List<PresenceEvidenceResponse>>
     findBySession(
             @PathVariable UUID classSessionId
     ) {
 
-        var evidence = presenceEvidenceService
-                .findBySession(classSessionId)
-                .stream()
-                .map(PresenceEvidenceResponse::from)
-                .toList();
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
 
-        return ResponseEntity.ok(evidence);
+        var evidence =
+                presenceEvidenceService
+                        .findBySession(
+                                classSessionId,
+                                currentUser
+                        )
+                        .stream()
+                        .map(PresenceEvidenceResponse::from)
+                        .toList();
+
+        return ResponseEntity.ok(
+                evidence
+        );
     }
 
     @GetMapping(
@@ -71,16 +80,23 @@ public class PresenceEvidenceController {
             @PathVariable UUID studentId
     ) {
 
-        var evidence = presenceEvidenceService
-                .findByStudentAndSession(
-                        studentId,
-                        classSessionId
-                )
-                .stream()
-                .map(PresenceEvidenceResponse::from)
-                .toList();
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
 
-        return ResponseEntity.ok(evidence);
+        var evidence =
+                presenceEvidenceService
+                        .findByStudentAndSession(
+                                studentId,
+                                classSessionId,
+                                currentUser
+                        )
+                        .stream()
+                        .map(PresenceEvidenceResponse::from)
+                        .toList();
+
+        return ResponseEntity.ok(
+                evidence
+        );
     }
 
     @GetMapping(
@@ -93,33 +109,47 @@ public class PresenceEvidenceController {
             @PathVariable PresenceEvidenceType type
     ) {
 
-        var evidence = presenceEvidenceService
-                .findByStudentSessionAndType(
-                        studentId,
-                        classSessionId,
-                        type
-                )
-                .stream()
-                .map(PresenceEvidenceResponse::from)
-                .toList();
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
 
-        return ResponseEntity.ok(evidence);
+        var evidence =
+                presenceEvidenceService
+                        .findByStudentSessionAndType(
+                                studentId,
+                                classSessionId,
+                                type,
+                                currentUser
+                        )
+                        .stream()
+                        .map(PresenceEvidenceResponse::from)
+                        .toList();
+
+        return ResponseEntity.ok(
+                evidence
+        );
     }
 
-    @GetMapping(
-            "/blocks/{sessionBlockId}"
-    )
+    @GetMapping("/blocks/{sessionBlockId}")
     public ResponseEntity<List<PresenceEvidenceResponse>>
     findBySessionBlock(
             @PathVariable UUID sessionBlockId
     ) {
 
-        var evidence = presenceEvidenceService
-                .findBySessionBlock(sessionBlockId)
-                .stream()
-                .map(PresenceEvidenceResponse::from)
-                .toList();
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
 
-        return ResponseEntity.ok(evidence);
+        var evidence =
+                presenceEvidenceService
+                        .findBySessionBlock(
+                                sessionBlockId,
+                                currentUser
+                        )
+                        .stream()
+                        .map(PresenceEvidenceResponse::from)
+                        .toList();
+
+        return ResponseEntity.ok(
+                evidence
+        );
     }
 }
