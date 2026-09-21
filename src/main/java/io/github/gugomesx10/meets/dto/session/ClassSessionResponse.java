@@ -15,14 +15,16 @@ public record ClassSessionResponse(
         LocalTime startTime,
         LocalTime endTime,
         ClassSessionStatus status,
+        String googleMeetSpaceName,
+        String googleMeetConferenceRecordName,
         Instant createdAt,
         Instant updatedAt
-
 ) {
 
     public static ClassSessionResponse from(
             ClassSession session
     ) {
+
         return new ClassSessionResponse(
                 session.getId(),
                 session.getCourse().getId(),
@@ -31,6 +33,8 @@ public record ClassSessionResponse(
                 session.getStartTime(),
                 session.getEndTime(),
                 session.getStatus(),
+                session.getGoogleMeetSpaceName(),
+                session.getGoogleMeetConferenceRecordName(),
                 session.getCreatedAt(),
                 session.getUpdatedAt()
         );

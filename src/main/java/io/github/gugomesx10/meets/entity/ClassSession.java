@@ -5,7 +5,6 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -34,20 +33,46 @@ public class ClassSession {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private ClassSessionStatus status;
-    @Column(name = "created_at", nullable = false, updatable = false)
+
+    @Column(
+            name = "google_meet_space_name",
+            length = 255
+    )
+    private String googleMeetSpaceName;
+
+    @Column(
+            name = "google_meet_conference_record_name",
+            length = 255
+    )
+    private String googleMeetConferenceRecordName;
+
+    @Column(
+            name = "created_at",
+            nullable = false,
+            updatable = false
+    )
     private Instant createdAt;
-    @Column(name = "updated_at", nullable = false)
+
+    @Column(
+            name = "updated_at",
+            nullable = false
+    )
     private Instant updatedAt;
 
     @PrePersist
     void prePersist() {
-        Instant now = Instant.now();
+
+        Instant now =
+                Instant.now();
+
         createdAt = now;
         updatedAt = now;
     }
 
     @PreUpdate
     void preUpdate() {
-        updatedAt = Instant.now();
+
+        updatedAt =
+                Instant.now();
     }
 }
