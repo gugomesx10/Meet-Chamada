@@ -13,8 +13,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -32,6 +34,9 @@ class SessionBlockServiceTest {
     private InstitutionRepository institutionRepository;
 
     @Autowired
+    private InstitutionMembershipRepository institutionMembershipRepository;
+
+    @Autowired
     private CourseRepository courseRepository;
 
     @Autowired
@@ -40,6 +45,7 @@ class SessionBlockServiceTest {
     @Autowired
     private ClassSessionRepository classSessionRepository;
 
+    private Institution institution;
     private User instructor;
     private User student;
     private User outsider;
@@ -49,7 +55,7 @@ class SessionBlockServiceTest {
     @BeforeEach
     void setUp() {
 
-        Institution institution =
+        institution =
                 new Institution();
 
         institution.setName(
@@ -76,6 +82,16 @@ class SessionBlockServiceTest {
                 "externo@teste.com"
         );
 
+        createInstitutionMembership(
+                instructor,
+                InstitutionRole.TEACHER
+        );
+
+        createInstitutionMembership(
+                student,
+                InstitutionRole.STUDENT
+        );
+
         course = new Course();
 
         course.setInstitution(institution);
@@ -91,32 +107,17 @@ class SessionBlockServiceTest {
                 CourseStatus.ACTIVE
         );
 
-        course = courseRepository.save(course);
+        course =
+                courseRepository.save(course);
 
-        CourseMembership instructorMembership =
-                new CourseMembership();
-
-        instructorMembership.setCourse(course);
-        instructorMembership.setUser(instructor);
-        instructorMembership.setRole(
+        createCourseMembership(
+                instructor,
                 CourseRole.INSTRUCTOR
         );
 
-        courseMembershipRepository.save(
-                instructorMembership
-        );
-
-        CourseMembership studentMembership =
-                new CourseMembership();
-
-        studentMembership.setCourse(course);
-        studentMembership.setUser(student);
-        studentMembership.setRole(
+        createCourseMembership(
+                student,
                 CourseRole.STUDENT
-        );
-
-        courseMembershipRepository.save(
-                studentMembership
         );
 
         classSession =
@@ -156,7 +157,8 @@ class SessionBlockServiceTest {
                         "Currículo e empregabilidade",
                         SessionBlockType.THEORETICAL,
                         LocalTime.of(9, 0),
-                        LocalTime.of(10, 20)
+                        LocalTime.of(10, 20),
+                        instructor
                 );
 
         assertNotNull(block.getId());
@@ -184,13 +186,14 @@ class SessionBlockServiceTest {
                         null,
                         SessionBlockType.TECHNICAL,
                         LocalTime.of(9, 0),
-                        LocalTime.of(10, 0)
+                        LocalTime.of(10, 0),
+                        instructor
                 )
         );
     }
 
     @Test
-    void usuarioSemVinculoNaoDeveCriarBloco() {
+    void usuarioSemVinculoNaoDeveSerInstrutorDoBloco() {
 
         assertThrows(
                 ForbiddenOperationException.class,
@@ -201,7 +204,26 @@ class SessionBlockServiceTest {
                         null,
                         SessionBlockType.TECHNICAL,
                         LocalTime.of(9, 0),
-                        LocalTime.of(10, 0)
+                        LocalTime.of(10, 0),
+                        instructor
+                )
+        );
+    }
+
+    @Test
+    void alunoNaoDeveCriarBlocoMesmoComInstrutorValido() {
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> sessionBlockService.create(
+                        classSession.getId(),
+                        instructor.getId(),
+                        "Tentativa inválida",
+                        null,
+                        SessionBlockType.TECHNICAL,
+                        LocalTime.of(9, 0),
+                        LocalTime.of(10, 0),
+                        student
                 )
         );
     }
@@ -218,7 +240,8 @@ class SessionBlockServiceTest {
                         null,
                         SessionBlockType.TECHNICAL,
                         LocalTime.of(8, 30),
-                        LocalTime.of(10, 0)
+                        LocalTime.of(10, 0),
+                        instructor
                 )
         );
     }
@@ -235,7 +258,8 @@ class SessionBlockServiceTest {
                         null,
                         SessionBlockType.TECHNICAL,
                         LocalTime.of(11, 0),
-                        LocalTime.of(12, 30)
+                        LocalTime.of(12, 30),
+                        instructor
                 )
         );
     }
@@ -252,7 +276,8 @@ class SessionBlockServiceTest {
                         null,
                         SessionBlockType.TECHNICAL,
                         LocalTime.of(10, 0),
-                        LocalTime.of(10, 0)
+                        LocalTime.of(10, 0),
+                        instructor
                 )
         );
     }
@@ -267,7 +292,8 @@ class SessionBlockServiceTest {
                 null,
                 SessionBlockType.THEORETICAL,
                 LocalTime.of(9, 0),
-                LocalTime.of(10, 20)
+                LocalTime.of(10, 20),
+                instructor
         );
 
         assertThrows(
@@ -279,7 +305,8 @@ class SessionBlockServiceTest {
                         null,
                         SessionBlockType.TECHNICAL,
                         LocalTime.of(10, 0),
-                        LocalTime.of(11, 0)
+                        LocalTime.of(11, 0),
+                        instructor
                 )
         );
     }
@@ -294,7 +321,8 @@ class SessionBlockServiceTest {
                 null,
                 SessionBlockType.THEORETICAL,
                 LocalTime.of(9, 0),
-                LocalTime.of(10, 0)
+                LocalTime.of(10, 0),
+                instructor
         );
 
         SessionBlock second =
@@ -305,10 +333,13 @@ class SessionBlockServiceTest {
                         null,
                         SessionBlockType.TECHNICAL,
                         LocalTime.of(10, 0),
-                        LocalTime.of(11, 0)
+                        LocalTime.of(11, 0),
+                        instructor
                 );
 
-        assertNotNull(second.getId());
+        assertNotNull(
+                second.getId()
+        );
     }
 
     @Test
@@ -331,13 +362,14 @@ class SessionBlockServiceTest {
                         null,
                         SessionBlockType.TECHNICAL,
                         LocalTime.of(9, 0),
-                        LocalTime.of(10, 0)
+                        LocalTime.of(10, 0),
+                        instructor
                 )
         );
     }
 
     @Test
-    void deveRetornarBlocosOrdenadosPorHorario() {
+    void alunoDeveConsultarBlocosDoCurso() {
 
         sessionBlockService.create(
                 classSession.getId(),
@@ -346,7 +378,8 @@ class SessionBlockServiceTest {
                 null,
                 SessionBlockType.TECHNICAL,
                 LocalTime.of(10, 30),
-                LocalTime.of(12, 0)
+                LocalTime.of(12, 0),
+                instructor
         );
 
         sessionBlockService.create(
@@ -356,15 +389,20 @@ class SessionBlockServiceTest {
                 null,
                 SessionBlockType.THEORETICAL,
                 LocalTime.of(9, 0),
-                LocalTime.of(10, 20)
+                LocalTime.of(10, 20),
+                instructor
         );
 
         var blocks =
                 sessionBlockService.findBySession(
-                        classSession.getId()
+                        classSession.getId(),
+                        student
                 );
 
-        assertEquals(2, blocks.size());
+        assertEquals(
+                2,
+                blocks.size()
+        );
 
         assertEquals(
                 "Primeiro bloco",
@@ -377,15 +415,80 @@ class SessionBlockServiceTest {
         );
     }
 
+    @Test
+    void usuarioSemVinculoNaoDeveConsultarBlocos() {
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> sessionBlockService.findBySession(
+                        classSession.getId(),
+                        outsider
+                )
+        );
+    }
+
     private User createUser(
             String name,
             String email
     ) {
 
         User user = new User();
+
         user.setName(name);
         user.setEmail(email);
 
-        return userRepository.save(user);
+        return userRepository.save(
+                user
+        );
+    }
+
+    private InstitutionMembership createInstitutionMembership(
+            User user,
+            InstitutionRole role
+    ) {
+
+        InstitutionMembership membership =
+                new InstitutionMembership();
+
+        membership.setInstitution(
+                institution
+        );
+
+        membership.setUser(
+                user
+        );
+
+        membership.setRole(
+                role
+        );
+
+        return institutionMembershipRepository.save(
+                membership
+        );
+    }
+
+    private CourseMembership createCourseMembership(
+            User user,
+            CourseRole role
+    ) {
+
+        CourseMembership membership =
+                new CourseMembership();
+
+        membership.setCourse(
+                course
+        );
+
+        membership.setUser(
+                user
+        );
+
+        membership.setRole(
+                role
+        );
+
+        return courseMembershipRepository.save(
+                membership
+        );
     }
 }

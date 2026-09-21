@@ -2,12 +2,15 @@ package io.github.gugomesx10.meets.controller;
 
 import io.github.gugomesx10.meets.dto.session.ClassSessionResponse;
 import io.github.gugomesx10.meets.dto.session.CreateClassSessionRequest;
+import io.github.gugomesx10.meets.entity.User;
+import io.github.gugomesx10.meets.service.AuthenticatedUserService;
 import io.github.gugomesx10.meets.service.ClassSessionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -17,19 +20,25 @@ import java.util.UUID;
 public class ClassSessionController {
 
     private final ClassSessionService classSessionService;
+    private final AuthenticatedUserService authenticatedUserService;
 
     @PostMapping
     public ResponseEntity<ClassSessionResponse> create(
             @Valid @RequestBody CreateClassSessionRequest request
     ) {
 
-        var session = classSessionService.create(
-                request.courseId(),
-                request.title(),
-                request.sessionDate(),
-                request.startTime(),
-                request.endTime()
-        );
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
+        var session =
+                classSessionService.create(
+                        request.courseId(),
+                        request.title(),
+                        request.sessionDate(),
+                        request.startTime(),
+                        request.endTime(),
+                        currentUser
+                );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -43,9 +52,13 @@ public class ClassSessionController {
             @PathVariable UUID classSessionId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var session =
                 classSessionService.findById(
-                        classSessionId
+                        classSessionId,
+                        currentUser
                 );
 
         return ResponseEntity.ok(
@@ -58,9 +71,15 @@ public class ClassSessionController {
             @PathVariable UUID courseId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var sessions =
                 classSessionService
-                        .findByCourse(courseId)
+                        .findByCourse(
+                                courseId,
+                                currentUser
+                        )
                         .stream()
                         .map(ClassSessionResponse::from)
                         .toList();
@@ -73,9 +92,13 @@ public class ClassSessionController {
             @PathVariable UUID classSessionId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var session =
                 classSessionService.start(
-                        classSessionId
+                        classSessionId,
+                        currentUser
                 );
 
         return ResponseEntity.ok(
@@ -88,9 +111,13 @@ public class ClassSessionController {
             @PathVariable UUID classSessionId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var session =
                 classSessionService.complete(
-                        classSessionId
+                        classSessionId,
+                        currentUser
                 );
 
         return ResponseEntity.ok(
@@ -103,9 +130,13 @@ public class ClassSessionController {
             @PathVariable UUID classSessionId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var session =
                 classSessionService.cancel(
-                        classSessionId
+                        classSessionId,
+                        currentUser
                 );
 
         return ResponseEntity.ok(

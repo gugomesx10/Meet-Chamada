@@ -25,10 +25,12 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class SessionBlockService {
+
     private final SessionBlockRepository sessionBlockRepository;
     private final ClassSessionRepository classSessionRepository;
     private final UserRepository userRepository;
     private final CourseMembershipRepository courseMembershipRepository;
+    private final AuthorizationService authorizationService;
     @Transactional
     public SessionBlock create(
             UUID classSessionId,
@@ -37,7 +39,8 @@ public class SessionBlockService {
             String description,
             SessionBlockType type,
             LocalTime startTime,
-            LocalTime endTime
+            LocalTime endTime,
+            User currentUser
     ) {
 
         ClassSession classSession =
@@ -49,6 +52,11 @@ public class SessionBlockService {
                                 )
                         );
 
+        authorizationService.requireCourseInstructorOrAdmin(
+                currentUser,
+                classSession.getCourse()
+        );
+
         User instructor =
                 userRepository
                         .findById(instructorId)
@@ -58,7 +66,9 @@ public class SessionBlockService {
                                 )
                         );
 
-        validateSession(classSession);
+        validateSession(
+                classSession
+        );
 
         validateInstructor(
                 instructor.getId(),
@@ -83,33 +93,66 @@ public class SessionBlockService {
         SessionBlock block =
                 new SessionBlock();
 
-        block.setClassSession(classSession);
-        block.setInstructor(instructor);
-        block.setTitle(title.trim());
-        block.setDescription(description);
+        block.setClassSession(
+                classSession
+        );
+
+        block.setInstructor(
+                instructor
+        );
+
+        block.setTitle(
+                title.trim()
+        );
+
+        block.setDescription(
+                description
+        );
+
         block.setType(type);
         block.setStartTime(startTime);
         block.setEndTime(endTime);
 
-        return sessionBlockRepository.save(block);
+        return sessionBlockRepository.save(
+                block
+        );
     }
     @Transactional(readOnly = true)
     public SessionBlock findById(
-            UUID sessionBlockId
+            UUID sessionBlockId,
+            User currentUser
     ) {
 
-        return findRequired(sessionBlockId);
+        SessionBlock block =
+                findRequired(sessionBlockId);
+
+        authorizationService.requireCourseAccess(
+                currentUser,
+                block.getClassSession()
+                        .getCourse()
+        );
+
+        return block;
     }
     @Transactional(readOnly = true)
     public List<SessionBlock> findBySession(
-            UUID classSessionId
+            UUID classSessionId,
+            User currentUser
     ) {
 
-        if (!classSessionRepository.existsById(classSessionId)) {
-            throw new ResourceNotFoundException(
-                    "Sessão de aula não encontrada."
-            );
-        }
+        ClassSession classSession =
+                classSessionRepository
+                        .findById(classSessionId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Sessão de aula não encontrada."
+                                )
+                        );
+
+        authorizationService.requireCourseAccess(
+                currentUser,
+                classSession.getCourse()
+        );
 
         return sessionBlockRepository
                 .findAllByClassSessionIdOrderByStartTimeAsc(
@@ -118,10 +161,14 @@ public class SessionBlockService {
     }
     @Transactional(readOnly = true)
     public List<SessionBlock> findByInstructor(
-            UUID instructorId
+            UUID instructorId,
+            User currentUser
     ) {
 
-        if (!userRepository.existsById(instructorId)) {
+        if (!userRepository.existsById(
+                instructorId
+        )) {
+
             throw new ResourceNotFoundException(
                     "Instrutor não encontrado."
             );
@@ -130,7 +177,16 @@ public class SessionBlockService {
         return sessionBlockRepository
                 .findAllByInstructorId(
                         instructorId
-                );
+                )
+                .stream()
+                .filter(block ->
+                        authorizationService.hasCourseAccess(
+                                currentUser,
+                                block.getClassSession()
+                                        .getCourse()
+                        )
+                )
+                .toList();
     }
 
     private SessionBlock findRequired(
@@ -176,7 +232,9 @@ public class SessionBlockService {
                 courseMembershipRepository
                         .findByUserIdAndCourseId(
                                 instructorId,
-                                classSession.getCourse().getId()
+                                classSession
+                                        .getCourse()
+                                        .getId()
                         )
                         .orElseThrow(() ->
                                 new ForbiddenOperationException(
@@ -197,7 +255,9 @@ public class SessionBlockService {
             String title
     ) {
 
-        if (title == null || title.isBlank()) {
+        if (title == null
+                || title.isBlank()) {
+
             throw new BusinessRuleException(
                     "O título do bloco é obrigatório."
             );
@@ -209,6 +269,7 @@ public class SessionBlockService {
     ) {
 
         if (type == null) {
+
             throw new BusinessRuleException(
                     "O tipo do bloco é obrigatório."
             );
@@ -221,13 +282,16 @@ public class SessionBlockService {
             LocalTime endTime
     ) {
 
-        if (startTime == null || endTime == null) {
+        if (startTime == null
+                || endTime == null) {
+
             throw new BusinessRuleException(
                     "Os horários do bloco são obrigatórios."
             );
         }
 
         if (!startTime.isBefore(endTime)) {
+
             throw new BusinessRuleException(
                     "O horário inicial do bloco deve ser anterior ao horário final."
             );
@@ -277,6 +341,7 @@ public class SessionBlockService {
                         );
 
         if (overlaps) {
+
             throw new ConflictException(
                     "O horário informado se sobrepõe a outro bloco da aula."
             );

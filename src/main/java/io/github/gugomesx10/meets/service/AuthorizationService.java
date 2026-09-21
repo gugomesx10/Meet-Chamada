@@ -11,13 +11,11 @@ import io.github.gugomesx10.meets.repository.CourseMembershipRepository;
 import io.github.gugomesx10.meets.repository.InstitutionMembershipRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class AuthorizationService {
-
     private final InstitutionMembershipRepository institutionMembershipRepository;
     private final CourseMembershipRepository courseMembershipRepository;
 
@@ -86,27 +84,41 @@ public class AuthorizationService {
             Course course
     ) {
 
-        InstitutionMembership institutionMembership =
-                requireInstitutionMember(
-                        user,
-                        course.getInstitution().getId()
-                );
+        if (!hasCourseAccess(user, course)) {
+
+            throw new ForbiddenOperationException(
+                    "O usuário não possui acesso a este curso."
+            );
+        }
+    }
+
+    public boolean hasCourseAccess(
+            User user,
+            Course course
+    ) {
+
+        var institutionMembership =
+                institutionMembershipRepository
+                        .findByUserIdAndInstitutionId(
+                                user.getId(),
+                                course.getInstitution().getId()
+                        )
+                        .orElse(null);
+
+        if (institutionMembership == null) {
+            return false;
+        }
 
         if (institutionMembership.getRole()
                 == InstitutionRole.ADMIN) {
 
-            return;
+            return true;
         }
 
-        courseMembershipRepository
-                .findByUserIdAndCourseId(
+        return courseMembershipRepository
+                .existsByUserIdAndCourseId(
                         user.getId(),
                         course.getId()
-                )
-                .orElseThrow(() ->
-                        new ForbiddenOperationException(
-                                "O usuário não pertence a este curso."
-                        )
                 );
     }
 

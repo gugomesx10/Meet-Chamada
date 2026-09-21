@@ -3,22 +3,33 @@ package io.github.gugomesx10.meets.service;
 import io.github.gugomesx10.meets.TestcontainersConfiguration;
 import io.github.gugomesx10.meets.entity.ClassSession;
 import io.github.gugomesx10.meets.entity.Course;
+import io.github.gugomesx10.meets.entity.CourseMembership;
 import io.github.gugomesx10.meets.entity.Institution;
+import io.github.gugomesx10.meets.entity.InstitutionMembership;
+import io.github.gugomesx10.meets.entity.User;
 import io.github.gugomesx10.meets.entity.enums.ClassSessionStatus;
+import io.github.gugomesx10.meets.entity.enums.CourseRole;
 import io.github.gugomesx10.meets.entity.enums.CourseStatus;
+import io.github.gugomesx10.meets.entity.enums.InstitutionRole;
 import io.github.gugomesx10.meets.exception.BusinessRuleException;
 import io.github.gugomesx10.meets.exception.ConflictException;
+import io.github.gugomesx10.meets.exception.ForbiddenOperationException;
 import io.github.gugomesx10.meets.repository.ClassSessionRepository;
+import io.github.gugomesx10.meets.repository.CourseMembershipRepository;
 import io.github.gugomesx10.meets.repository.CourseRepository;
+import io.github.gugomesx10.meets.repository.InstitutionMembershipRepository;
 import io.github.gugomesx10.meets.repository.InstitutionRepository;
+import io.github.gugomesx10.meets.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -33,23 +44,64 @@ class ClassSessionServiceTest {
     private InstitutionRepository institutionRepository;
 
     @Autowired
+    private InstitutionMembershipRepository institutionMembershipRepository;
+
+    @Autowired
     private CourseRepository courseRepository;
+
+    @Autowired
+    private CourseMembershipRepository courseMembershipRepository;
 
     @Autowired
     private ClassSessionRepository classSessionRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    private Institution institution;
     private Course course;
+    private User instructor;
+    private User student;
+    private User outsider;
 
     @BeforeEach
     void setUp() {
 
-        Institution institution = new Institution();
+        institution = new Institution();
         institution.setName("Escola da Nuvem");
 
         institution =
-                institutionRepository.save(institution);
+                institutionRepository.save(
+                        institution
+                );
+
+        instructor = createUser(
+                "Professora",
+                "professora@teste.com"
+        );
+
+        student = createUser(
+                "Gustavo",
+                "gustavo@teste.com"
+        );
+
+        outsider = createUser(
+                "Usuário externo",
+                "externo@teste.com"
+        );
+
+        createInstitutionMembership(
+                instructor,
+                InstitutionRole.TEACHER
+        );
+
+        createInstitutionMembership(
+                student,
+                InstitutionRole.STUDENT
+        );
 
         course = new Course();
+
         course.setInstitution(institution);
         course.setName("AWS re/Start");
         course.setDescription(
@@ -59,9 +111,24 @@ class ClassSessionServiceTest {
         course.setEndDate(
                 LocalDate.now().plusMonths(3)
         );
-        course.setStatus(CourseStatus.ACTIVE);
+        course.setStatus(
+                CourseStatus.ACTIVE
+        );
 
-        course = courseRepository.save(course);
+        course =
+                courseRepository.save(
+                        course
+                );
+
+        createCourseMembership(
+                instructor,
+                CourseRole.INSTRUCTOR
+        );
+
+        createCourseMembership(
+                student,
+                CourseRole.STUDENT
+        );
     }
 
     @Test
@@ -73,7 +140,8 @@ class ClassSessionServiceTest {
                         "Treinamento AWS",
                         LocalDate.now(),
                         LocalTime.of(9, 0),
-                        LocalTime.of(12, 0)
+                        LocalTime.of(12, 0),
+                        instructor
                 );
 
         assertNotNull(session.getId());
@@ -104,7 +172,8 @@ class ClassSessionServiceTest {
                         "Aula inválida",
                         LocalDate.now(),
                         LocalTime.of(12, 0),
-                        LocalTime.of(9, 0)
+                        LocalTime.of(9, 0),
+                        instructor
                 )
         );
     }
@@ -119,7 +188,8 @@ class ClassSessionServiceTest {
                         "Aula antecipada",
                         course.getStartDate().minusDays(1),
                         LocalTime.of(9, 0),
-                        LocalTime.of(12, 0)
+                        LocalTime.of(12, 0),
+                        instructor
                 )
         );
     }
@@ -134,7 +204,8 @@ class ClassSessionServiceTest {
                         "Aula fora do período",
                         course.getEndDate().plusDays(1),
                         LocalTime.of(9, 0),
-                        LocalTime.of(12, 0)
+                        LocalTime.of(12, 0),
+                        instructor
                 )
         );
     }
@@ -142,11 +213,13 @@ class ClassSessionServiceTest {
     @Test
     void deveIniciarAulaAgendada() {
 
-        ClassSession session = createSession();
+        ClassSession session =
+                createSession();
 
         ClassSession started =
                 classSessionService.start(
-                        session.getId()
+                        session.getId(),
+                        instructor
                 );
 
         assertEquals(
@@ -158,15 +231,18 @@ class ClassSessionServiceTest {
     @Test
     void deveConcluirAulaEmAndamento() {
 
-        ClassSession session = createSession();
+        ClassSession session =
+                createSession();
 
         classSessionService.start(
-                session.getId()
+                session.getId(),
+                instructor
         );
 
         ClassSession completed =
                 classSessionService.complete(
-                        session.getId()
+                        session.getId(),
+                        instructor
                 );
 
         assertEquals(
@@ -178,12 +254,14 @@ class ClassSessionServiceTest {
     @Test
     void naoDeveConcluirAulaQueNaoEstaEmAndamento() {
 
-        ClassSession session = createSession();
+        ClassSession session =
+                createSession();
 
         assertThrows(
                 ConflictException.class,
                 () -> classSessionService.complete(
-                        session.getId()
+                        session.getId(),
+                        instructor
                 )
         );
     }
@@ -191,11 +269,13 @@ class ClassSessionServiceTest {
     @Test
     void deveCancelarAulaAgendada() {
 
-        ClassSession session = createSession();
+        ClassSession session =
+                createSession();
 
         ClassSession cancelled =
                 classSessionService.cancel(
-                        session.getId()
+                        session.getId(),
+                        instructor
                 );
 
         assertEquals(
@@ -207,20 +287,24 @@ class ClassSessionServiceTest {
     @Test
     void aulaConcluidaNaoPodeSerCancelada() {
 
-        ClassSession session = createSession();
+        ClassSession session =
+                createSession();
 
         classSessionService.start(
-                session.getId()
+                session.getId(),
+                instructor
         );
 
         classSessionService.complete(
-                session.getId()
+                session.getId(),
+                instructor
         );
 
         assertThrows(
                 ConflictException.class,
                 () -> classSessionService.cancel(
-                        session.getId()
+                        session.getId(),
+                        instructor
                 )
         );
     }
@@ -228,8 +312,13 @@ class ClassSessionServiceTest {
     @Test
     void cursoCanceladoNaoDeveAceitarNovaAula() {
 
-        course.setStatus(CourseStatus.CANCELLED);
-        courseRepository.save(course);
+        course.setStatus(
+                CourseStatus.CANCELLED
+        );
+
+        courseRepository.save(
+                course
+        );
 
         assertThrows(
                 ConflictException.class,
@@ -238,7 +327,57 @@ class ClassSessionServiceTest {
                         "Nova aula",
                         LocalDate.now(),
                         LocalTime.of(9, 0),
-                        LocalTime.of(12, 0)
+                        LocalTime.of(12, 0),
+                        instructor
+                )
+        );
+    }
+
+    @Test
+    void alunoDevePoderConsultarAulaDoCurso() {
+
+        ClassSession session =
+                createSession();
+
+        ClassSession found =
+                classSessionService.findById(
+                        session.getId(),
+                        student
+                );
+
+        assertEquals(
+                session.getId(),
+                found.getId()
+        );
+    }
+
+    @Test
+    void alunoNaoDeveCriarAula() {
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> classSessionService.create(
+                        course.getId(),
+                        "Aula indevida",
+                        LocalDate.now(),
+                        LocalTime.of(9, 0),
+                        LocalTime.of(12, 0),
+                        student
+                )
+        );
+    }
+
+    @Test
+    void usuarioSemVinculoNaoDeveConsultarAula() {
+
+        ClassSession session =
+                createSession();
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> classSessionService.findById(
+                        session.getId(),
+                        outsider
                 )
         );
     }
@@ -250,7 +389,57 @@ class ClassSessionServiceTest {
                 "Aula AWS",
                 LocalDate.now(),
                 LocalTime.of(9, 0),
-                LocalTime.of(12, 0)
+                LocalTime.of(12, 0),
+                instructor
+        );
+    }
+
+    private User createUser(
+            String name,
+            String email
+    ) {
+
+        User user = new User();
+
+        user.setName(name);
+        user.setEmail(email);
+
+        return userRepository.save(
+                user
+        );
+    }
+
+    private InstitutionMembership createInstitutionMembership(
+            User user,
+            InstitutionRole role
+    ) {
+
+        InstitutionMembership membership =
+                new InstitutionMembership();
+
+        membership.setInstitution(institution);
+        membership.setUser(user);
+        membership.setRole(role);
+
+        return institutionMembershipRepository.save(
+                membership
+        );
+    }
+
+    private CourseMembership createCourseMembership(
+            User user,
+            CourseRole role
+    ) {
+
+        CourseMembership membership =
+                new CourseMembership();
+
+        membership.setCourse(course);
+        membership.setUser(user);
+        membership.setRole(role);
+
+        return courseMembershipRepository.save(
+                membership
         );
     }
 }

@@ -2,6 +2,8 @@ package io.github.gugomesx10.meets.controller;
 
 import io.github.gugomesx10.meets.dto.sessionblock.CreateSessionBlockRequest;
 import io.github.gugomesx10.meets.dto.sessionblock.SessionBlockResponse;
+import io.github.gugomesx10.meets.entity.User;
+import io.github.gugomesx10.meets.service.AuthenticatedUserService;
 import io.github.gugomesx10.meets.service.SessionBlockService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ import java.util.UUID;
 public class SessionBlockController {
 
     private final SessionBlockService sessionBlockService;
+    private final AuthenticatedUserService authenticatedUserService;
 
     @PostMapping("/sessions/{classSessionId}")
     public ResponseEntity<SessionBlockResponse> create(
@@ -24,19 +27,26 @@ public class SessionBlockController {
             @Valid @RequestBody CreateSessionBlockRequest request
     ) {
 
-        var block = sessionBlockService.create(
-                classSessionId,
-                request.instructorId(),
-                request.title(),
-                request.description(),
-                request.type(),
-                request.startTime(),
-                request.endTime()
-        );
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
+        var block =
+                sessionBlockService.create(
+                        classSessionId,
+                        request.instructorId(),
+                        request.title(),
+                        request.description(),
+                        request.type(),
+                        request.startTime(),
+                        request.endTime(),
+                        currentUser
+                );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(SessionBlockResponse.from(block));
+                .body(
+                        SessionBlockResponse.from(block)
+                );
     }
 
     @GetMapping("/{sessionBlockId}")
@@ -44,9 +54,13 @@ public class SessionBlockController {
             @PathVariable UUID sessionBlockId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var block =
                 sessionBlockService.findById(
-                        sessionBlockId
+                        sessionBlockId,
+                        currentUser
                 );
 
         return ResponseEntity.ok(
@@ -59,9 +73,15 @@ public class SessionBlockController {
             @PathVariable UUID classSessionId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var blocks =
                 sessionBlockService
-                        .findBySession(classSessionId)
+                        .findBySession(
+                                classSessionId,
+                                currentUser
+                        )
                         .stream()
                         .map(SessionBlockResponse::from)
                         .toList();
@@ -74,9 +94,15 @@ public class SessionBlockController {
             @PathVariable UUID instructorId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var blocks =
                 sessionBlockService
-                        .findByInstructor(instructorId)
+                        .findByInstructor(
+                                instructorId,
+                                currentUser
+                        )
                         .stream()
                         .map(SessionBlockResponse::from)
                         .toList();

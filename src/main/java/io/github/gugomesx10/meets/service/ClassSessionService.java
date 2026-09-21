@@ -2,6 +2,7 @@ package io.github.gugomesx10.meets.service;
 
 import io.github.gugomesx10.meets.entity.ClassSession;
 import io.github.gugomesx10.meets.entity.Course;
+import io.github.gugomesx10.meets.entity.User;
 import io.github.gugomesx10.meets.entity.enums.ClassSessionStatus;
 import io.github.gugomesx10.meets.entity.enums.CourseStatus;
 import io.github.gugomesx10.meets.exception.BusinessRuleException;
@@ -20,25 +21,32 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class ClassSessionService {
-
     private final ClassSessionRepository classSessionRepository;
     private final CourseRepository courseRepository;
+    private final AuthorizationService authorizationService;
     @Transactional
     public ClassSession create(
             UUID courseId,
             String title,
             LocalDate sessionDate,
             LocalTime startTime,
-            LocalTime endTime
+            LocalTime endTime,
+            User currentUser
     ) {
 
-        Course course = courseRepository
-                .findById(courseId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "Curso não encontrado."
-                        )
-                );
+        Course course =
+                courseRepository
+                        .findById(courseId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Curso não encontrado."
+                                )
+                        );
+
+        authorizationService.requireCourseInstructorOrAdmin(
+                currentUser,
+                course
+        );
 
         validateCourse(course);
         validateTitle(title);
@@ -62,15 +70,23 @@ public class ClassSessionService {
                 ClassSessionStatus.SCHEDULED
         );
 
-        return classSessionRepository.save(session);
+        return classSessionRepository.save(
+                session
+        );
     }
     @Transactional
     public ClassSession start(
-            UUID classSessionId
+            UUID classSessionId,
+            User currentUser
     ) {
 
         ClassSession session =
                 findRequired(classSessionId);
+
+        authorizationService.requireCourseInstructorOrAdmin(
+                currentUser,
+                session.getCourse()
+        );
 
         if (session.getStatus()
                 != ClassSessionStatus.SCHEDULED) {
@@ -84,15 +100,23 @@ public class ClassSessionService {
                 ClassSessionStatus.IN_PROGRESS
         );
 
-        return classSessionRepository.save(session);
+        return classSessionRepository.save(
+                session
+        );
     }
     @Transactional
     public ClassSession complete(
-            UUID classSessionId
+            UUID classSessionId,
+            User currentUser
     ) {
 
         ClassSession session =
                 findRequired(classSessionId);
+
+        authorizationService.requireCourseInstructorOrAdmin(
+                currentUser,
+                session.getCourse()
+        );
 
         if (session.getStatus()
                 != ClassSessionStatus.IN_PROGRESS) {
@@ -106,15 +130,23 @@ public class ClassSessionService {
                 ClassSessionStatus.COMPLETED
         );
 
-        return classSessionRepository.save(session);
+        return classSessionRepository.save(
+                session
+        );
     }
     @Transactional
     public ClassSession cancel(
-            UUID classSessionId
+            UUID classSessionId,
+            User currentUser
     ) {
 
         ClassSession session =
                 findRequired(classSessionId);
+
+        authorizationService.requireCourseInstructorOrAdmin(
+                currentUser,
+                session.getCourse()
+        );
 
         if (session.getStatus()
                 == ClassSessionStatus.COMPLETED) {
@@ -136,25 +168,45 @@ public class ClassSessionService {
                 ClassSessionStatus.CANCELLED
         );
 
-        return classSessionRepository.save(session);
+        return classSessionRepository.save(
+                session
+        );
     }
     @Transactional(readOnly = true)
     public ClassSession findById(
-            UUID classSessionId
+            UUID classSessionId,
+            User currentUser
     ) {
 
-        return findRequired(classSessionId);
+        ClassSession session =
+                findRequired(classSessionId);
+
+        authorizationService.requireCourseAccess(
+                currentUser,
+                session.getCourse()
+        );
+
+        return session;
     }
     @Transactional(readOnly = true)
     public List<ClassSession> findByCourse(
-            UUID courseId
+            UUID courseId,
+            User currentUser
     ) {
 
-        if (!courseRepository.existsById(courseId)) {
-            throw new ResourceNotFoundException(
-                    "Curso não encontrado."
-            );
-        }
+        Course course =
+                courseRepository
+                        .findById(courseId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Curso não encontrado."
+                                )
+                        );
+
+        authorizationService.requireCourseAccess(
+                currentUser,
+                course
+        );
 
         return classSessionRepository
                 .findAllByCourseIdOrderBySessionDateAsc(
@@ -180,6 +232,7 @@ public class ClassSessionService {
     ) {
 
         if (title == null || title.isBlank()) {
+
             throw new BusinessRuleException(
                     "O título da aula é obrigatório."
             );
@@ -224,6 +277,7 @@ public class ClassSessionService {
         }
 
         if (!startTime.isBefore(endTime)) {
+
             throw new BusinessRuleException(
                     "O horário inicial deve ser anterior ao horário final."
             );
