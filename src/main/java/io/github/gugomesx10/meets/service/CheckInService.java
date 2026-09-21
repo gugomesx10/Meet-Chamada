@@ -1,11 +1,20 @@
 package io.github.gugomesx10.meets.service;
 
-import io.github.gugomesx10.meets.entity.*;
+import io.github.gugomesx10.meets.entity.CheckInResponse;
+import io.github.gugomesx10.meets.entity.CheckInWindow;
+import io.github.gugomesx10.meets.entity.ClassSession;
+import io.github.gugomesx10.meets.entity.SessionBlock;
+import io.github.gugomesx10.meets.entity.User;
 import io.github.gugomesx10.meets.entity.enums.CheckInStatus;
-import io.github.gugomesx10.meets.entity.enums.CourseRole;
 import io.github.gugomesx10.meets.entity.enums.EvidenceSource;
 import io.github.gugomesx10.meets.entity.enums.PresenceEvidenceType;
-import io.github.gugomesx10.meets.repository.*;
+import io.github.gugomesx10.meets.exception.BusinessRuleException;
+import io.github.gugomesx10.meets.exception.ConflictException;
+import io.github.gugomesx10.meets.exception.ResourceNotFoundException;
+import io.github.gugomesx10.meets.repository.CheckInResponseRepository;
+import io.github.gugomesx10.meets.repository.CheckInWindowRepository;
+import io.github.gugomesx10.meets.repository.ClassSessionRepository;
+import io.github.gugomesx10.meets.repository.SessionBlockRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,161 +26,191 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class CheckInService {
-
     private final CheckInWindowRepository checkInWindowRepository;
     private final CheckInResponseRepository checkInResponseRepository;
-
     private final ClassSessionRepository classSessionRepository;
     private final SessionBlockRepository sessionBlockRepository;
-    private final UserRepository userRepository;
-    private final CourseMembershipRepository courseMembershipRepository;
-
     private final PresenceEvidenceService presenceEvidenceService;
     private final AuditService auditService;
-
+    private final AuthorizationService authorizationService;
     @Transactional
     public CheckInWindow openCheckIn(
             UUID classSessionId,
             UUID sessionBlockId,
-            UUID openedById,
+            User openedBy,
             Duration duration
     ) {
-        if (duration == null || duration.isZero() || duration.isNegative()) {
-            throw new IllegalArgumentException(
+
+        if (duration == null
+                || duration.isZero()
+                || duration.isNegative()) {
+
+            throw new BusinessRuleException(
                     "A duração do check-in deve ser maior que zero."
             );
         }
 
-        ClassSession classSession = classSessionRepository
-                .findById(classSessionId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Sessão de aula não encontrada."
-                        )
+        ClassSession classSession =
+                findClassSession(
+                        classSessionId
                 );
 
-        User openedBy = userRepository
-                .findById(openedById)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Usuário responsável pelo check-in não encontrado."
-                        )
+        authorizationService
+                .requireCourseInstructorOrAdmin(
+                        openedBy,
+                        classSession.getCourse()
                 );
 
-        validateInstructor(
-                openedBy.getId(),
-                classSession.getCourse().getId()
-        );
-
-        SessionBlock sessionBlock = null;
+        SessionBlock sessionBlock =
+                null;
 
         if (sessionBlockId != null) {
-            sessionBlock = sessionBlockRepository
-                    .findById(sessionBlockId)
-                    .orElseThrow(() ->
-                            new IllegalArgumentException(
-                                    "Bloco da sessão não encontrado."
-                            )
-                    );
 
-            if (!sessionBlock.getClassSession().getId()
-                    .equals(classSession.getId())) {
+            sessionBlock =
+                    sessionBlockRepository
+                            .findById(sessionBlockId)
+                            .orElseThrow(() ->
+                                    new ResourceNotFoundException(
+                                            "Bloco da aula não encontrado."
+                                    )
+                            );
 
-                throw new IllegalArgumentException(
+            if (!sessionBlock
+                    .getClassSession()
+                    .getId()
+                    .equals(classSessionId)) {
+
+                throw new BusinessRuleException(
                         "O bloco informado não pertence à sessão de aula."
                 );
             }
         }
 
-        Instant now = Instant.now();
+        Instant now =
+                Instant.now();
 
-        CheckInWindow window = new CheckInWindow();
+        CheckInWindow window =
+                new CheckInWindow();
 
-        window.setClassSession(classSession);
-        window.setSessionBlock(sessionBlock);
-        window.setOpenedBy(openedBy);
-        window.setOpenedAt(now);
-        window.setClosesAt(now.plus(duration));
-        window.setStatus(CheckInStatus.OPEN);
+        window.setClassSession(
+                classSession
+        );
 
-        CheckInWindow savedWindow =
-                checkInWindowRepository.save(window);
+        window.setSessionBlock(
+                sessionBlock
+        );
+
+        window.setOpenedBy(
+                openedBy
+        );
+
+        window.setOpenedAt(
+                now
+        );
+
+        window.setClosesAt(
+                now.plus(duration)
+        );
+
+        window.setStatus(
+                CheckInStatus.OPEN
+        );
+
+        CheckInWindow saved =
+                checkInWindowRepository.save(
+                        window
+                );
 
         auditService.register(
                 openedBy,
                 "CHECK_IN_OPENED",
                 "CheckInWindow",
-                savedWindow.getId(),
+                saved.getId(),
                 "Janela de check-in aberta."
         );
 
-        return savedWindow;
+        return saved;
     }
-    @Transactional
+    @Transactional(noRollbackFor = ConflictException.class)
     public CheckInResponse respond(
             UUID checkInWindowId,
-            UUID studentId
+            User student
     ) {
-        CheckInWindow window = checkInWindowRepository
-                .findById(checkInWindowId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Janela de check-in não encontrada."
-                        )
+
+        CheckInWindow window =
+                findRequired(
+                        checkInWindowId
                 );
 
-        User student = userRepository
-                .findById(studentId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Aluno não encontrado."
-                        )
+        authorizationService
+                .requireCourseStudent(
+                        student,
+                        window.getClassSession()
+                                .getCourse()
                 );
 
-        if (window.getStatus() != CheckInStatus.OPEN) {
-            throw new IllegalStateException(
+        if (window.getStatus()
+                != CheckInStatus.OPEN) {
+
+            throw new ConflictException(
                     "O check-in não está aberto."
             );
         }
 
-        Instant now = Instant.now();
+        Instant now =
+                Instant.now();
 
-        if (now.isAfter(window.getClosesAt())) {
-            window.setStatus(CheckInStatus.CLOSED);
-            checkInWindowRepository.save(window);
+        if (now.isAfter(
+                window.getClosesAt()
+        )) {
 
-            throw new IllegalStateException(
-                    "O prazo para responder ao check-in terminou."
+            window.setStatus(
+                    CheckInStatus.CLOSED
+            );
+
+            checkInWindowRepository.save(
+                    window
+            );
+
+            throw new ConflictException(
+                    "O período para responder ao check-in foi encerrado."
             );
         }
 
-        UUID courseId =
-                window.getClassSession().getCourse().getId();
+        if (checkInResponseRepository
+                .existsByCheckInWindowIdAndStudentId(
+                        checkInWindowId,
+                        student.getId()
+                )) {
 
-        validateStudent(studentId, courseId);
-
-        boolean alreadyResponded =
-                checkInResponseRepository
-                        .existsByCheckInWindowIdAndStudentId(
-                                checkInWindowId,
-                                studentId
-                        );
-
-        if (alreadyResponded) {
-            throw new IllegalStateException(
+            throw new ConflictException(
                     "O aluno já respondeu a este check-in."
             );
         }
 
-        CheckInResponse response = new CheckInResponse();
+        CheckInResponse response =
+                new CheckInResponse();
 
-        response.setCheckInWindow(window);
-        response.setStudent(student);
-        response.setRespondedAt(now);
-        response.setValid(true);
+        response.setCheckInWindow(
+                window
+        );
 
-        CheckInResponse savedResponse =
-                checkInResponseRepository.save(response);
+        response.setStudent(
+                student
+        );
+
+        response.setRespondedAt(
+                now
+        );
+
+        response.setValid(
+                true
+        );
+
+        CheckInResponse saved =
+                checkInResponseRepository.save(
+                        response
+                );
 
         presenceEvidenceService.register(
                 student,
@@ -180,160 +219,177 @@ public class CheckInService {
                 PresenceEvidenceType.CHECK_IN,
                 EvidenceSource.INTERNAL,
                 now,
-                "Check-in confirmado pelo aluno."
+                "Resposta válida ao check-in."
         );
 
         auditService.register(
                 student,
                 "CHECK_IN_RESPONDED",
                 "CheckInResponse",
-                savedResponse.getId(),
+                saved.getId(),
                 "Aluno respondeu ao check-in."
         );
 
-        return savedResponse;
+        return saved;
     }
     @Transactional
     public CheckInWindow closeCheckIn(
             UUID checkInWindowId,
-            UUID closedById
+            User currentUser
     ) {
-        CheckInWindow window = getWindow(checkInWindowId);
 
-        User closedBy = userRepository
-                .findById(closedById)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Usuário não encontrado."
-                        )
+        CheckInWindow window =
+                findRequired(
+                        checkInWindowId
                 );
 
-        validateInstructor(
-                closedBy.getId(),
-                window.getClassSession().getCourse().getId()
-        );
+        authorizationService
+                .requireCourseInstructorOrAdmin(
+                        currentUser,
+                        window.getClassSession()
+                                .getCourse()
+                );
 
-        if (window.getStatus() != CheckInStatus.OPEN) {
-            throw new IllegalStateException(
-                    "Somente um check-in aberto pode ser encerrado."
+        if (window.getStatus()
+                != CheckInStatus.OPEN) {
+
+            throw new ConflictException(
+                    "Somente um check-in aberto pode ser fechado."
             );
         }
 
-        window.setStatus(CheckInStatus.CLOSED);
+        window.setStatus(
+                CheckInStatus.CLOSED
+        );
 
-        CheckInWindow savedWindow =
-                checkInWindowRepository.save(window);
+        CheckInWindow saved =
+                checkInWindowRepository.save(
+                        window
+                );
 
         auditService.register(
-                closedBy,
+                currentUser,
                 "CHECK_IN_CLOSED",
                 "CheckInWindow",
-                savedWindow.getId(),
+                saved.getId(),
                 "Janela de check-in encerrada."
         );
 
-        return savedWindow;
+        return saved;
     }
     @Transactional
     public CheckInWindow cancelCheckIn(
             UUID checkInWindowId,
-            UUID cancelledById
+            User currentUser
     ) {
-        CheckInWindow window = getWindow(checkInWindowId);
 
-        User cancelledBy = userRepository
-                .findById(cancelledById)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Usuário não encontrado."
-                        )
+        CheckInWindow window =
+                findRequired(
+                        checkInWindowId
                 );
 
-        validateInstructor(
-                cancelledBy.getId(),
-                window.getClassSession().getCourse().getId()
-        );
+        authorizationService
+                .requireCourseInstructorOrAdmin(
+                        currentUser,
+                        window.getClassSession()
+                                .getCourse()
+                );
 
-        if (window.getStatus() != CheckInStatus.OPEN) {
-            throw new IllegalStateException(
+        if (window.getStatus()
+                != CheckInStatus.OPEN) {
+
+            throw new ConflictException(
                     "Somente um check-in aberto pode ser cancelado."
             );
         }
 
-        window.setStatus(CheckInStatus.CANCELLED);
+        window.setStatus(
+                CheckInStatus.CANCELLED
+        );
 
-        CheckInWindow savedWindow =
-                checkInWindowRepository.save(window);
+        CheckInWindow saved =
+                checkInWindowRepository.save(
+                        window
+                );
 
         auditService.register(
-                cancelledBy,
+                currentUser,
                 "CHECK_IN_CANCELLED",
                 "CheckInWindow",
-                savedWindow.getId(),
+                saved.getId(),
                 "Janela de check-in cancelada."
         );
 
-        return savedWindow;
+        return saved;
     }
     @Transactional(readOnly = true)
     public List<CheckInWindow> findBySession(
-            UUID classSessionId
+            UUID classSessionId,
+            User currentUser
     ) {
+
+        ClassSession classSession =
+                findClassSession(
+                        classSessionId
+                );
+
+        authorizationService.requireCourseAccess(
+                currentUser,
+                classSession.getCourse()
+        );
+
         return checkInWindowRepository
-                .findAllByClassSessionId(classSessionId);
+                .findAllByClassSessionId(
+                        classSessionId
+                );
     }
     @Transactional(readOnly = true)
     public List<CheckInResponse> findResponses(
+            UUID checkInWindowId,
+            User currentUser
+    ) {
+
+        CheckInWindow window =
+                findRequired(
+                        checkInWindowId
+                );
+
+        authorizationService
+                .requireCourseInstructorOrAdmin(
+                        currentUser,
+                        window.getClassSession()
+                                .getCourse()
+                );
+
+        return checkInResponseRepository
+                .findAllByCheckInWindowId(
+                        checkInWindowId
+                );
+    }
+
+    private CheckInWindow findRequired(
             UUID checkInWindowId
     ) {
-        return checkInResponseRepository
-                .findAllByCheckInWindowId(checkInWindowId);
-    }
-    private CheckInWindow getWindow(UUID id) {
+
         return checkInWindowRepository
-                .findById(id)
+                .findById(checkInWindowId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Janela de check-in não encontrada."
+                        new ResourceNotFoundException(
+                                "Check-in não encontrado."
                         )
                 );
     }
-    private void validateInstructor(
-            UUID userId,
-            UUID courseId
-    ) {
-        CourseMembership membership =
-                courseMembershipRepository
-                        .findByUserIdAndCourseId(userId, courseId)
-                        .orElseThrow(() ->
-                                new IllegalStateException(
-                                        "O usuário não pertence ao curso."
-                                )
-                        );
 
-        if (membership.getRole() != CourseRole.INSTRUCTOR) {
-            throw new IllegalStateException(
-                    "Somente instrutores podem gerenciar check-ins."
-            );
-        }
-    }
-    private void validateStudent(
-            UUID userId,
-            UUID courseId
+    private ClassSession findClassSession(
+            UUID classSessionId
     ) {
-        CourseMembership membership =
-                courseMembershipRepository
-                        .findByUserIdAndCourseId(userId, courseId)
-                        .orElseThrow(() ->
-                                new IllegalStateException(
-                                        "O usuário não pertence ao curso."
-                                )
-                        );
 
-        if (membership.getRole() != CourseRole.STUDENT) {
-            throw new IllegalStateException(
-                    "Somente alunos podem responder ao check-in."
-            );
-        }
+        return classSessionRepository
+                .findById(classSessionId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Sessão de aula não encontrada."
+                        )
+                );
     }
 }

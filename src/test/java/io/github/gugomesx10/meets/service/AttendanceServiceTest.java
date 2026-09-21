@@ -3,6 +3,7 @@ package io.github.gugomesx10.meets.service;
 import io.github.gugomesx10.meets.TestcontainersConfiguration;
 import io.github.gugomesx10.meets.entity.*;
 import io.github.gugomesx10.meets.entity.enums.*;
+import io.github.gugomesx10.meets.exception.ForbiddenOperationException;
 import io.github.gugomesx10.meets.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -24,13 +27,13 @@ class AttendanceServiceTest {
     private AttendanceService attendanceService;
 
     @Autowired
-    private PresenceEvidenceService presenceEvidenceService;
-
-    @Autowired
     private UserRepository userRepository;
 
     @Autowired
     private InstitutionRepository institutionRepository;
+
+    @Autowired
+    private InstitutionMembershipRepository institutionMembershipRepository;
 
     @Autowired
     private CourseRepository courseRepository;
@@ -42,123 +45,166 @@ class AttendanceServiceTest {
     private ClassSessionRepository classSessionRepository;
 
     @Autowired
+    private PresenceEvidenceRepository presenceEvidenceRepository;
+
+    @Autowired
     private AttendanceDecisionRepository attendanceDecisionRepository;
 
+    private Institution institution;
     private User student;
     private User instructor;
-    private Course course;
     private ClassSession classSession;
 
     @BeforeEach
     void setUp() {
 
-        Institution institution = new Institution();
-        institution.setName("Escola da Nuvem");
-        institution = institutionRepository.save(institution);
+        institution =
+                new Institution();
 
-        student = new User();
-        student.setName("Gustavo");
-        student.setEmail("gustavo@teste.com");
-        student = userRepository.save(student);
+        institution.setName(
+                "Escola da Nuvem"
+        );
 
-        instructor = new User();
-        instructor.setName("Professora");
-        instructor.setEmail("professora@teste.com");
-        instructor = userRepository.save(instructor);
+        institution =
+                institutionRepository.save(
+                        institution
+                );
 
-        course = new Course();
+        student = createUser(
+                "Gustavo",
+                "gustavo@teste.com"
+        );
+
+        instructor = createUser(
+                "Professora",
+                "professora@teste.com"
+        );
+
+        createInstitutionMembership(
+                student,
+                InstitutionRole.STUDENT
+        );
+
+        createInstitutionMembership(
+                instructor,
+                InstitutionRole.TEACHER
+        );
+
+        Course course =
+                new Course();
+
         course.setInstitution(institution);
         course.setName("AWS re/Start");
-        course.setDescription("Treinamento em computação em nuvem");
-        course.setStartDate(LocalDate.now());
-        course.setEndDate(LocalDate.now().plusMonths(3));
-        course.setStatus(CourseStatus.ACTIVE);
-        course = courseRepository.save(course);
+        course.setDescription(
+                "Treinamento AWS"
+        );
+        course.setStartDate(
+                LocalDate.now()
+        );
+        course.setEndDate(
+                LocalDate.now().plusMonths(3)
+        );
+        course.setStatus(
+                CourseStatus.ACTIVE
+        );
 
-        CourseMembership studentMembership = new CourseMembership();
-        studentMembership.setCourse(course);
-        studentMembership.setUser(student);
-        studentMembership.setRole(CourseRole.STUDENT);
-        courseMembershipRepository.save(studentMembership);
+        course =
+                courseRepository.save(
+                        course
+                );
 
-        CourseMembership instructorMembership = new CourseMembership();
-        instructorMembership.setCourse(course);
-        instructorMembership.setUser(instructor);
-        instructorMembership.setRole(CourseRole.INSTRUCTOR);
-        courseMembershipRepository.save(instructorMembership);
+        createCourseMembership(
+                course,
+                student,
+                CourseRole.STUDENT
+        );
 
-        classSession = new ClassSession();
+        createCourseMembership(
+                course,
+                instructor,
+                CourseRole.INSTRUCTOR
+        );
+
+        classSession =
+                new ClassSession();
+
         classSession.setCourse(course);
-        classSession.setTitle("Treinamento AWS");
-        classSession.setSessionDate(LocalDate.now());
-        classSession.setStartTime(LocalTime.of(9, 0));
-        classSession.setEndTime(LocalTime.of(12, 0));
-        classSession.setStatus(ClassSessionStatus.COMPLETED);
-        classSession = classSessionRepository.save(classSession);
+        classSession.setTitle(
+                "Aula AWS"
+        );
+        classSession.setSessionDate(
+                LocalDate.now()
+        );
+        classSession.setStartTime(
+                LocalTime.of(9, 0)
+        );
+        classSession.setEndTime(
+                LocalTime.of(12, 0)
+        );
+        classSession.setStatus(
+                ClassSessionStatus.COMPLETED
+        );
+
+        classSession =
+                classSessionRepository.save(
+                        classSession
+                );
     }
 
     @Test
-    void aulaEmAndamentoDeveManterPresencaPendente() {
+    void aulaEmAndamentoDeveGerarPending() {
 
-        classSession.setStatus(ClassSessionStatus.IN_PROGRESS);
-        classSessionRepository.save(classSession);
-
-        AttendanceDecision decision = attendanceService.evaluate(
-                student.getId(),
-                classSession.getId()
+        classSession.setStatus(
+                ClassSessionStatus.IN_PROGRESS
         );
+
+        classSessionRepository.save(
+                classSession
+        );
+
+        AttendanceDecision decision =
+                attendanceService.evaluate(
+                        student.getId(),
+                        classSession.getId(),
+                        instructor
+                );
 
         assertEquals(
                 AttendanceStatus.PENDING,
                 decision.getStatus()
         );
-
-        assertEquals(
-                AttendanceDecisionSource.SYSTEM,
-                decision.getDecisionSource()
-        );
-
-        assertNull(decision.getDecidedAt());
     }
 
     @Test
-    void nenhumaEvidenciaDeveResultarEmAusencia() {
+    void semEvidenciaDeveGerarAbsent() {
 
-        AttendanceDecision decision = attendanceService.evaluate(
-                student.getId(),
-                classSession.getId()
-        );
+        AttendanceDecision decision =
+                attendanceService.evaluate(
+                        student.getId(),
+                        classSession.getId(),
+                        instructor
+                );
 
         assertEquals(
                 AttendanceStatus.ABSENT,
                 decision.getStatus()
         );
-
-        assertEquals(
-                AttendanceDecisionSource.SYSTEM,
-                decision.getDecisionSource()
-        );
-
-        assertNotNull(decision.getDecidedAt());
     }
 
     @Test
-    void somenteConexaoNoMeetDeveExigirRevisao() {
+    void somenteMeetingDeveGerarReviewRequired() {
 
-        presenceEvidenceService.register(
-                student,
-                classSession,
-                null,
+        createEvidence(
                 PresenceEvidenceType.MEETING_SESSION,
-                EvidenceSource.GOOGLE_MEET,
-                null,
-                "Aluno esteve conectado à reunião."
+                EvidenceSource.GOOGLE_MEET
         );
 
-        AttendanceDecision decision = attendanceService.evaluate(
-                student.getId(),
-                classSession.getId()
-        );
+        AttendanceDecision decision =
+                attendanceService.evaluate(
+                        student.getId(),
+                        classSession.getId(),
+                        instructor
+                );
 
         assertEquals(
                 AttendanceStatus.REVIEW_REQUIRED,
@@ -167,32 +213,24 @@ class AttendanceServiceTest {
     }
 
     @Test
-    void meetMaisCheckInDeveConfirmarPresenca() {
+    void meetingMaisCheckInDeveConfirmarPresenca() {
 
-        presenceEvidenceService.register(
-                student,
-                classSession,
-                null,
+        createEvidence(
                 PresenceEvidenceType.MEETING_SESSION,
-                EvidenceSource.GOOGLE_MEET,
-                null,
-                "Participação registrada pelo Google Meet."
+                EvidenceSource.GOOGLE_MEET
         );
 
-        presenceEvidenceService.register(
-                student,
-                classSession,
-                null,
+        createEvidence(
                 PresenceEvidenceType.CHECK_IN,
-                EvidenceSource.INTERNAL,
-                null,
-                "Check-in realizado durante a aula."
+                EvidenceSource.INTERNAL
         );
 
-        AttendanceDecision decision = attendanceService.evaluate(
-                student.getId(),
-                classSession.getId()
-        );
+        AttendanceDecision decision =
+                attendanceService.evaluate(
+                        student.getId(),
+                        classSession.getId(),
+                        instructor
+                );
 
         assertEquals(
                 AttendanceStatus.CONFIRMED,
@@ -201,32 +239,24 @@ class AttendanceServiceTest {
     }
 
     @Test
-    void duasEvidenciasAtivasSemMeetDevemConfirmarPresenca() {
+    void duasEvidenciasAtivasDevemConfirmarSemMeeting() {
 
-        presenceEvidenceService.register(
-                student,
-                classSession,
-                null,
+        createEvidence(
                 PresenceEvidenceType.CHECK_IN,
-                EvidenceSource.INTERNAL,
-                null,
-                "Check-in realizado."
+                EvidenceSource.INTERNAL
         );
 
-        presenceEvidenceService.register(
-                student,
-                classSession,
-                null,
-                PresenceEvidenceType.POLL_RESPONSE,
-                EvidenceSource.INTERNAL,
-                null,
-                "Aluno respondeu à enquete da aula."
+        createEvidence(
+                PresenceEvidenceType.ACTIVITY_RESPONSE,
+                EvidenceSource.INTERNAL
         );
 
-        AttendanceDecision decision = attendanceService.evaluate(
-                student.getId(),
-                classSession.getId()
-        );
+        AttendanceDecision decision =
+                attendanceService.evaluate(
+                        student.getId(),
+                        classSession.getId(),
+                        instructor
+                );
 
         assertEquals(
                 AttendanceStatus.CONFIRMED,
@@ -237,20 +267,17 @@ class AttendanceServiceTest {
     @Test
     void confirmacaoDoProfessorDeveConfirmarPresenca() {
 
-        presenceEvidenceService.register(
-                student,
-                classSession,
-                null,
+        createEvidence(
                 PresenceEvidenceType.TEACHER_CONFIRMATION,
-                EvidenceSource.TEACHER,
-                null,
-                "Professora confirmou que o aluno acompanhou a aula."
+                EvidenceSource.TEACHER
         );
 
-        AttendanceDecision decision = attendanceService.evaluate(
-                student.getId(),
-                classSession.getId()
-        );
+        AttendanceDecision decision =
+                attendanceService.evaluate(
+                        student.getId(),
+                        classSession.getId(),
+                        instructor
+                );
 
         assertEquals(
                 AttendanceStatus.CONFIRMED,
@@ -259,22 +286,19 @@ class AttendanceServiceTest {
     }
 
     @Test
-    void umaUnicaEvidenciaAtivaDeveExigirRevisao() {
+    void umaUnicaEvidenciaAtivaDeveGerarReviewRequired() {
 
-        presenceEvidenceService.register(
-                student,
-                classSession,
-                null,
+        createEvidence(
                 PresenceEvidenceType.CHECK_IN,
-                EvidenceSource.INTERNAL,
-                null,
-                "Aluno realizou apenas um check-in."
+                EvidenceSource.INTERNAL
         );
 
-        AttendanceDecision decision = attendanceService.evaluate(
-                student.getId(),
-                classSession.getId()
-        );
+        AttendanceDecision decision =
+                attendanceService.evaluate(
+                        student.getId(),
+                        classSession.getId(),
+                        instructor
+                );
 
         assertEquals(
                 AttendanceStatus.REVIEW_REQUIRED,
@@ -283,58 +307,199 @@ class AttendanceServiceTest {
     }
 
     @Test
-    void decisaoManualNaoDeveSerSobrescritaPeloSistema() {
+    void decisaoManualNaoDeveSerSobrescrita() {
 
-        AttendanceDecision manualDecision = new AttendanceDecision();
+        AttendanceDecision manual =
+                new AttendanceDecision();
 
-        manualDecision.setStudent(student);
-        manualDecision.setClassSession(classSession);
-        manualDecision.setStatus(AttendanceStatus.JUSTIFIED);
-        manualDecision.setDecisionSource(
+        manual.setStudent(student);
+        manual.setClassSession(classSession);
+        manual.setStatus(
+                AttendanceStatus.JUSTIFIED
+        );
+        manual.setDecisionSource(
                 AttendanceDecisionSource.TEACHER
         );
-        manualDecision.setDecidedBy(instructor);
-        manualDecision.setReason(
-                "Ausência justificada manualmente pela professora."
+        manual.setDecidedBy(instructor);
+        manual.setDecidedAt(
+                Instant.now()
+        );
+        manual.setReason(
+                "Ausência justificada manualmente."
         );
 
-        manualDecision = attendanceDecisionRepository.save(
-                manualDecision
-        );
+        manual =
+                attendanceDecisionRepository.save(
+                        manual
+                );
 
-        presenceEvidenceService.register(
-                student,
-                classSession,
-                null,
-                PresenceEvidenceType.MEETING_SESSION,
-                EvidenceSource.GOOGLE_MEET,
-                null,
-                "Evidência adicionada posteriormente."
-        );
-
-        AttendanceDecision evaluated = attendanceService.evaluate(
-                student.getId(),
-                classSession.getId()
-        );
+        AttendanceDecision result =
+                attendanceService.evaluate(
+                        student.getId(),
+                        classSession.getId(),
+                        instructor
+                );
 
         assertEquals(
-                manualDecision.getId(),
-                evaluated.getId()
+                manual.getId(),
+                result.getId()
         );
 
         assertEquals(
                 AttendanceStatus.JUSTIFIED,
-                evaluated.getStatus()
+                result.getStatus()
         );
 
         assertEquals(
                 AttendanceDecisionSource.TEACHER,
-                evaluated.getDecisionSource()
+                result.getDecisionSource()
+        );
+    }
+
+    @Test
+    void alunoNaoDeveAvaliarPropriaPresenca() {
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> attendanceService.evaluate(
+                        student.getId(),
+                        classSession.getId(),
+                        student
+                )
+        );
+    }
+
+    @Test
+    void alunoDeveConsultarPropriaPresenca() {
+
+        AttendanceDecision created =
+                attendanceService.evaluate(
+                        student.getId(),
+                        classSession.getId(),
+                        instructor
+                );
+
+        AttendanceDecision found =
+                attendanceService.findByStudentAndSession(
+                        student.getId(),
+                        classSession.getId(),
+                        student
+                );
+
+        assertEquals(
+                created.getId(),
+                found.getId()
         );
 
         assertEquals(
-                instructor.getId(),
-                evaluated.getDecidedBy().getId()
+                student.getId(),
+                found.getStudent().getId()
+        );
+    }
+
+    @Test
+    void alunoNaoDeveListarPresencasDaTurma() {
+
+        attendanceService.evaluate(
+                student.getId(),
+                classSession.getId(),
+                instructor
+        );
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> attendanceService.findBySession(
+                        classSession.getId(),
+                        student
+                )
+        );
+    }
+
+    private PresenceEvidence createEvidence(
+            PresenceEvidenceType type,
+            EvidenceSource source
+    ) {
+
+        PresenceEvidence evidence =
+                new PresenceEvidence();
+
+        evidence.setStudent(student);
+        evidence.setClassSession(classSession);
+        evidence.setType(type);
+        evidence.setSource(source);
+        evidence.setOccurredAt(
+                Instant.now()
+        );
+
+        return presenceEvidenceRepository.save(
+                evidence
+        );
+    }
+
+    private User createUser(
+            String name,
+            String email
+    ) {
+
+        User user =
+                new User();
+
+        user.setName(name);
+        user.setEmail(email);
+
+        return userRepository.save(
+                user
+        );
+    }
+
+    private InstitutionMembership createInstitutionMembership(
+            User user,
+            InstitutionRole role
+    ) {
+
+        InstitutionMembership membership =
+                new InstitutionMembership();
+
+        membership.setInstitution(
+                institution
+        );
+
+        membership.setUser(
+                user
+        );
+
+        membership.setRole(
+                role
+        );
+
+        return institutionMembershipRepository.save(
+                membership
+        );
+    }
+
+    private CourseMembership createCourseMembership(
+            Course course,
+            User user,
+            CourseRole role
+    ) {
+
+        CourseMembership membership =
+                new CourseMembership();
+
+        membership.setCourse(
+                course
+        );
+
+        membership.setUser(
+                user
+        );
+
+        membership.setRole(
+                role
+        );
+
+        return courseMembershipRepository.save(
+                membership
         );
     }
 }

@@ -6,43 +6,71 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
-@Table(name="meet_presence_evidence")
+@Table(name = "meet_presence_evidence")
 @Getter
 @Setter
 @NoArgsConstructor
 public class PresenceEvidence {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private java.util.UUID id;
+    private UUID id;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(
+            name = "student_id",
+            nullable = false
+    )
     private User student;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "class_session_id", nullable = false)
+    @JoinColumn(
+            name = "class_session_id",
+            nullable = false
+    )
     private ClassSession classSession;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "session_block_id")
     private SessionBlock sessionBlock;
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
+    @Column(
+            nullable = false,
+            length = 30
+    )
     private PresenceEvidenceType type;
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
+    @Column(
+            nullable = false,
+            length = 30
+    )
     private EvidenceSource source;
-    @Column(name = "occurred_at", nullable = false, updatable = false)
+    @Column(
+            name = "occurred_at",
+            nullable = false,
+            updatable = false
+    )
     private Instant occurredAt;
+    @Column(name = "ended_at")
+    private Instant endedAt;
+    @Column(
+            name = "external_reference",
+            length = 500
+    )
+    private String externalReference;
     @Column(length = 1000)
     private String details;
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(
+            name = "created_at",
+            nullable = false,
+            updatable = false
+    )
     private Instant createdAt;
 
     @PrePersist
     void prePersist() {
-        if(createdAt == null) {
+
+        if (createdAt == null) {
             createdAt = Instant.now();
         }
     }

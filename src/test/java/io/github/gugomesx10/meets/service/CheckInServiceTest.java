@@ -3,6 +3,8 @@ package io.github.gugomesx10.meets.service;
 import io.github.gugomesx10.meets.TestcontainersConfiguration;
 import io.github.gugomesx10.meets.entity.*;
 import io.github.gugomesx10.meets.entity.enums.*;
+import io.github.gugomesx10.meets.exception.ConflictException;
+import io.github.gugomesx10.meets.exception.ForbiddenOperationException;
 import io.github.gugomesx10.meets.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -31,6 +34,9 @@ class CheckInServiceTest {
     private InstitutionRepository institutionRepository;
 
     @Autowired
+    private InstitutionMembershipRepository institutionMembershipRepository;
+
+    @Autowired
     private CourseRepository courseRepository;
 
     @Autowired
@@ -45,92 +51,205 @@ class CheckInServiceTest {
     @Autowired
     private PresenceEvidenceRepository presenceEvidenceRepository;
 
+    private Institution institution;
     private User instructor;
     private User student;
+    private User admin;
+    private User outsider;
     private Course course;
     private ClassSession classSession;
 
     @BeforeEach
     void setUp() {
 
-        Institution institution = new Institution();
-        institution.setName("Escola da Nuvem");
-        institution = institutionRepository.save(institution);
+        institution =
+                new Institution();
 
-        instructor = new User();
-        instructor.setName("Professora");
-        instructor.setEmail("professora@teste.com");
-        instructor = userRepository.save(instructor);
+        institution.setName(
+                "Escola da Nuvem"
+        );
 
-        student = new User();
-        student.setName("Gustavo");
-        student.setEmail("gustavo@teste.com");
-        student = userRepository.save(student);
+        institution =
+                institutionRepository.save(
+                        institution
+                );
 
-        course = new Course();
-        course.setInstitution(institution);
-        course.setName("AWS re/Start");
-        course.setDescription("Treinamento AWS");
-        course.setStartDate(LocalDate.now());
-        course.setEndDate(LocalDate.now().plusMonths(3));
-        course.setStatus(CourseStatus.ACTIVE);
-        course = courseRepository.save(course);
+        instructor = createUser(
+                "Professora",
+                "professora@teste.com"
+        );
 
-        CourseMembership instructorMembership = new CourseMembership();
-        instructorMembership.setCourse(course);
-        instructorMembership.setUser(instructor);
-        instructorMembership.setRole(CourseRole.INSTRUCTOR);
-        courseMembershipRepository.save(instructorMembership);
+        student = createUser(
+                "Gustavo",
+                "gustavo@teste.com"
+        );
 
-        CourseMembership studentMembership = new CourseMembership();
-        studentMembership.setCourse(course);
-        studentMembership.setUser(student);
-        studentMembership.setRole(CourseRole.STUDENT);
-        courseMembershipRepository.save(studentMembership);
+        admin = createUser(
+                "Administrador",
+                "admin@teste.com"
+        );
 
-        classSession = new ClassSession();
-        classSession.setCourse(course);
-        classSession.setTitle("Aula AWS");
-        classSession.setSessionDate(LocalDate.now());
-        classSession.setStartTime(LocalTime.of(9, 0));
-        classSession.setEndTime(LocalTime.of(12, 0));
-        classSession.setStatus(ClassSessionStatus.IN_PROGRESS);
-        classSession = classSessionRepository.save(classSession);
+        outsider = createUser(
+                "Usuário externo",
+                "externo@teste.com"
+        );
+
+        createInstitutionMembership(
+                instructor,
+                InstitutionRole.TEACHER
+        );
+
+        createInstitutionMembership(
+                student,
+                InstitutionRole.STUDENT
+        );
+
+        createInstitutionMembership(
+                admin,
+                InstitutionRole.ADMIN
+        );
+
+        course =
+                new Course();
+
+        course.setInstitution(
+                institution
+        );
+
+        course.setName(
+                "AWS re/Start"
+        );
+
+        course.setDescription(
+                "Treinamento AWS"
+        );
+
+        course.setStartDate(
+                LocalDate.now()
+        );
+
+        course.setEndDate(
+                LocalDate.now().plusMonths(3)
+        );
+
+        course.setStatus(
+                CourseStatus.ACTIVE
+        );
+
+        course =
+                courseRepository.save(
+                        course
+                );
+
+        createCourseMembership(
+                instructor,
+                CourseRole.INSTRUCTOR
+        );
+
+        createCourseMembership(
+                student,
+                CourseRole.STUDENT
+        );
+
+        classSession =
+                new ClassSession();
+
+        classSession.setCourse(
+                course
+        );
+
+        classSession.setTitle(
+                "Aula AWS"
+        );
+
+        classSession.setSessionDate(
+                LocalDate.now()
+        );
+
+        classSession.setStartTime(
+                LocalTime.of(9, 0)
+        );
+
+        classSession.setEndTime(
+                LocalTime.of(12, 0)
+        );
+
+        classSession.setStatus(
+                ClassSessionStatus.IN_PROGRESS
+        );
+
+        classSession =
+                classSessionRepository.save(
+                        classSession
+                );
     }
 
     @Test
     void deveAbrirCheckInQuandoUsuarioForInstrutor() {
 
-        CheckInWindow window = checkInService.openCheckIn(
-                classSession.getId(),
-                null,
-                instructor.getId(),
-                Duration.ofMinutes(3)
+        CheckInWindow window =
+                openCheckInAsInstructor();
+
+        assertNotNull(
+                window.getId()
         );
 
-        assertNotNull(window.getId());
-        assertEquals(CheckInStatus.OPEN, window.getStatus());
-        assertEquals(instructor.getId(), window.getOpenedBy().getId());
-        assertEquals(classSession.getId(), window.getClassSession().getId());
+        assertEquals(
+                CheckInStatus.OPEN,
+                window.getStatus()
+        );
+
+        assertEquals(
+                instructor.getId(),
+                window.getOpenedBy().getId()
+        );
+
+        assertEquals(
+                classSession.getId(),
+                window.getClassSession().getId()
+        );
+    }
+
+    @Test
+    void administradorDevePoderAbrirCheckIn() {
+
+        CheckInWindow window =
+                checkInService.openCheckIn(
+                        classSession.getId(),
+                        null,
+                        admin,
+                        Duration.ofMinutes(3)
+                );
+
+        assertNotNull(
+                window.getId()
+        );
+
+        assertEquals(
+                admin.getId(),
+                window.getOpenedBy().getId()
+        );
     }
 
     @Test
     void deveRegistrarRespostaEGerarEvidencia() {
 
-        CheckInWindow window = checkInService.openCheckIn(
-                classSession.getId(),
-                null,
-                instructor.getId(),
-                Duration.ofMinutes(3)
+        CheckInWindow window =
+                openCheckInAsInstructor();
+
+        CheckInResponse response =
+                checkInService.respond(
+                        window.getId(),
+                        student
+                );
+
+        assertNotNull(
+                response.getId()
         );
 
-        CheckInResponse response = checkInService.respond(
-                window.getId(),
-                student.getId()
+        assertTrue(
+                response.isValid()
         );
-
-        assertNotNull(response.getId());
-        assertTrue(response.isValid());
 
         assertTrue(
                 checkInResponseRepository
@@ -147,7 +266,10 @@ class CheckInServiceTest {
                                 classSession.getId()
                         );
 
-        assertEquals(1, evidences.size());
+        assertEquals(
+                1,
+                evidences.size()
+        );
 
         assertEquals(
                 PresenceEvidenceType.CHECK_IN,
@@ -163,23 +285,19 @@ class CheckInServiceTest {
     @Test
     void naoDevePermitirResponderDuasVezes() {
 
-        CheckInWindow window = checkInService.openCheckIn(
-                classSession.getId(),
-                null,
-                instructor.getId(),
-                Duration.ofMinutes(3)
-        );
+        CheckInWindow window =
+                openCheckInAsInstructor();
 
         checkInService.respond(
                 window.getId(),
-                student.getId()
+                student
         );
 
         assertThrows(
-                IllegalStateException.class,
+                ConflictException.class,
                 () -> checkInService.respond(
                         window.getId(),
-                        student.getId()
+                        student
                 )
         );
     }
@@ -188,13 +306,254 @@ class CheckInServiceTest {
     void alunoNaoDevePoderAbrirCheckIn() {
 
         assertThrows(
-                IllegalStateException.class,
+                ForbiddenOperationException.class,
                 () -> checkInService.openCheckIn(
                         classSession.getId(),
                         null,
-                        student.getId(),
+                        student,
                         Duration.ofMinutes(3)
                 )
+        );
+    }
+
+    @Test
+    void instrutorNaoDeveResponderCheckInComoAluno() {
+
+        CheckInWindow window =
+                openCheckInAsInstructor();
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> checkInService.respond(
+                        window.getId(),
+                        instructor
+                )
+        );
+    }
+
+    @Test
+    void alunoDeveListarCheckInsDaPropriaAula() {
+
+        CheckInWindow window =
+                openCheckInAsInstructor();
+
+        var windows =
+                checkInService.findBySession(
+                        classSession.getId(),
+                        student
+                );
+
+        assertEquals(
+                1,
+                windows.size()
+        );
+
+        assertEquals(
+                window.getId(),
+                windows.getFirst().getId()
+        );
+    }
+
+    @Test
+    void usuarioSemVinculoNaoDeveListarCheckInsDaAula() {
+
+        openCheckInAsInstructor();
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> checkInService.findBySession(
+                        classSession.getId(),
+                        outsider
+                )
+        );
+    }
+
+    @Test
+    void instrutorDeveListarRespostasDoCheckIn() {
+
+        CheckInWindow window =
+                openCheckInAsInstructor();
+
+        CheckInResponse response =
+                checkInService.respond(
+                        window.getId(),
+                        student
+                );
+
+        var responses =
+                checkInService.findResponses(
+                        window.getId(),
+                        instructor
+                );
+
+        assertEquals(
+                1,
+                responses.size()
+        );
+
+        assertEquals(
+                response.getId(),
+                responses.getFirst().getId()
+        );
+    }
+
+    @Test
+    void administradorDeveListarRespostasDoCheckIn() {
+
+        CheckInWindow window =
+                openCheckInAsInstructor();
+
+        checkInService.respond(
+                window.getId(),
+                student
+        );
+
+        var responses =
+                checkInService.findResponses(
+                        window.getId(),
+                        admin
+                );
+
+        assertEquals(
+                1,
+                responses.size()
+        );
+    }
+
+    @Test
+    void alunoNaoDeveListarRespostasDeTodos() {
+
+        CheckInWindow window =
+                openCheckInAsInstructor();
+
+        checkInService.respond(
+                window.getId(),
+                student
+        );
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> checkInService.findResponses(
+                        window.getId(),
+                        student
+                )
+        );
+    }
+
+    @Test
+    void administradorDevePoderFecharCheckIn() {
+
+        CheckInWindow window =
+                openCheckInAsInstructor();
+
+        CheckInWindow closed =
+                checkInService.closeCheckIn(
+                        window.getId(),
+                        admin
+                );
+
+        assertEquals(
+                CheckInStatus.CLOSED,
+                closed.getStatus()
+        );
+    }
+
+    @Test
+    void instrutorDevePoderCancelarCheckIn() {
+
+        CheckInWindow window =
+                openCheckInAsInstructor();
+
+        CheckInWindow cancelled =
+                checkInService.cancelCheckIn(
+                        window.getId(),
+                        instructor
+                );
+
+        assertEquals(
+                CheckInStatus.CANCELLED,
+                cancelled.getStatus()
+        );
+    }
+
+    private CheckInWindow openCheckInAsInstructor() {
+
+        return checkInService.openCheckIn(
+                classSession.getId(),
+                null,
+                instructor,
+                Duration.ofMinutes(3)
+        );
+    }
+
+    private User createUser(
+            String name,
+            String email
+    ) {
+
+        User user =
+                new User();
+
+        user.setName(
+                name
+        );
+
+        user.setEmail(
+                email
+        );
+
+        return userRepository.save(
+                user
+        );
+    }
+
+    private InstitutionMembership createInstitutionMembership(
+            User user,
+            InstitutionRole role
+    ) {
+
+        InstitutionMembership membership =
+                new InstitutionMembership();
+
+        membership.setInstitution(
+                institution
+        );
+
+        membership.setUser(
+                user
+        );
+
+        membership.setRole(
+                role
+        );
+
+        return institutionMembershipRepository.save(
+                membership
+        );
+    }
+
+    private CourseMembership createCourseMembership(
+            User user,
+            CourseRole role
+    ) {
+
+        CourseMembership membership =
+                new CourseMembership();
+
+        membership.setCourse(
+                course
+        );
+
+        membership.setUser(
+                user
+        );
+
+        membership.setRole(
+                role
+        );
+
+        return courseMembershipRepository.save(
+                membership
         );
     }
 }

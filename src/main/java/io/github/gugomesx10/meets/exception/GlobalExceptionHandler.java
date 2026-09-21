@@ -2,13 +2,19 @@ package io.github.gugomesx10.meets.exception;
 
 import io.github.gugomesx10.meets.dto.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import java.time.Instant;
+import java.util.stream.Collectors;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -17,6 +23,7 @@ public class GlobalExceptionHandler {
             ResourceNotFoundException exception,
             HttpServletRequest request
     ) {
+
         return buildResponse(
                 HttpStatus.NOT_FOUND,
                 exception.getMessage(),
@@ -24,11 +31,31 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiError> handleNoResourceFound(
+            NoResourceFoundException exception,
+            HttpServletRequest request
+    ) {
+
+        ApiError error = new ApiError(
+                Instant.now(),
+                HttpStatus.NOT_FOUND.value(),
+                HttpStatus.NOT_FOUND.getReasonPhrase(),
+                "Recurso não encontrado.",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(error);
+    }
+
     @ExceptionHandler(BusinessRuleException.class)
     public ResponseEntity<ApiError> handleBusinessRule(
             BusinessRuleException exception,
             HttpServletRequest request
     ) {
+
         return buildResponse(
                 HttpStatus.BAD_REQUEST,
                 exception.getMessage(),
@@ -41,6 +68,7 @@ public class GlobalExceptionHandler {
             ConflictException exception,
             HttpServletRequest request
     ) {
+
         return buildResponse(
                 HttpStatus.CONFLICT,
                 exception.getMessage(),
@@ -53,6 +81,7 @@ public class GlobalExceptionHandler {
             ForbiddenOperationException exception,
             HttpServletRequest request
     ) {
+
         return buildResponse(
                 HttpStatus.FORBIDDEN,
                 exception.getMessage(),
@@ -60,26 +89,57 @@ public class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(
-            IllegalArgumentException exception,
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiError> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException exception,
             HttpServletRequest request
     ) {
+
         return buildResponse(
                 HttpStatus.BAD_REQUEST,
-                exception.getMessage(),
+                "O corpo da requisição está inválido ou possui valores em formato incorreto.",
                 request.getRequestURI()
         );
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiError> handleIllegalState(
-            IllegalStateException exception,
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiError> handleValidation(
+            MethodArgumentNotValidException exception,
             HttpServletRequest request
     ) {
+
+        String message = exception
+                .getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .map(error ->
+                        error.getField()
+                                + ": "
+                                + error.getDefaultMessage()
+                )
+                .collect(Collectors.joining(", "));
+
         return buildResponse(
-                HttpStatus.CONFLICT,
-                exception.getMessage(),
+                HttpStatus.BAD_REQUEST,
+                message,
+                request.getRequestURI()
+        );
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleTypeMismatch(
+            MethodArgumentTypeMismatchException exception,
+            HttpServletRequest request
+    ) {
+
+        String message =
+                "O parâmetro '"
+                        + exception.getName()
+                        + "' possui um valor inválido.";
+
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                message,
                 request.getRequestURI()
         );
     }
@@ -89,6 +149,14 @@ public class GlobalExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
+
+        log.error(
+                "Erro inesperado ao processar {} {}",
+                request.getMethod(),
+                request.getRequestURI(),
+                exception
+        );
+
         return buildResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Ocorreu um erro interno inesperado.",
