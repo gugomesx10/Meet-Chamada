@@ -5,6 +5,7 @@ import io.github.gugomesx10.meets.exception.ForbiddenOperationException;
 import io.github.gugomesx10.meets.exception.ResourceNotFoundException;
 import io.github.gugomesx10.meets.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
@@ -16,25 +17,75 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthenticatedUserService {
 
     private final UserRepository userRepository;
-
     @Transactional(readOnly = true)
     public User getCurrentUser() {
 
         Authentication authentication =
-                SecurityContextHolder.getContext().getAuthentication();
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
 
         if (authentication == null
-                || !(authentication.getPrincipal() instanceof OidcUser oidcUser)) {
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
 
             throw new ForbiddenOperationException(
                     "Usuário autenticado não identificado."
             );
         }
 
-        return userRepository.findByExternalId(oidcUser.getSubject())
+        Object principal =
+                authentication.getPrincipal();
+
+        if (principal instanceof OidcUser oidcUser) {
+
+            return findByOidcUser(
+                    oidcUser
+            );
+        }
+
+        return findByBasicAuthentication(
+                authentication
+        );
+    }
+
+    private User findByOidcUser(
+            OidcUser oidcUser
+    ) {
+
+        return userRepository
+                .findByExternalId(
+                        oidcUser.getSubject()
+                )
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
                                 "Usuário autenticado não encontrado no sistema."
+                        )
+                );
+    }
+
+    private User findByBasicAuthentication(
+            Authentication authentication
+    ) {
+
+        String email =
+                authentication.getName();
+
+        if (email == null
+                || email.isBlank()) {
+
+            throw new ForbiddenOperationException(
+                    "Usuário autenticado não identificado."
+            );
+        }
+
+        return userRepository
+                .findByEmail(
+                        email.trim().toLowerCase()
+                )
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Usuário de desenvolvimento não encontrado no sistema."
                         )
                 );
     }

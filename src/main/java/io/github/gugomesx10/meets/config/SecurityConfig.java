@@ -15,7 +15,9 @@ import org.springframework.security.web.servlet.util.matcher.PathPatternRequestM
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http
+    ) throws Exception {
 
         PathPatternRequestMatcher.Builder paths =
                 PathPatternRequestMatcher.withDefaults();
@@ -23,66 +25,77 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf
                         .ignoringRequestMatchers(
+
                                 paths.matcher(
                                         HttpMethod.POST,
                                         "/api/v1/check-ins"
                                 ),
+
                                 paths.matcher(
                                         HttpMethod.POST,
                                         "/api/v1/check-ins/{checkInId}/responses"
                                 ),
+
                                 paths.matcher(
                                         HttpMethod.PATCH,
                                         "/api/v1/check-ins/{checkInId}/close"
                                 ),
+
                                 paths.matcher(
                                         HttpMethod.PATCH,
                                         "/api/v1/check-ins/{checkInId}/cancel"
                                 ),
+
                                 paths.matcher(
                                         HttpMethod.POST,
                                         "/api/v1/attendance/sessions/{classSessionId}/students/{studentId}/evaluate"
                                 ),
+
                                 paths.matcher(
                                         HttpMethod.POST,
                                         "/api/v1/attendance/sessions/{classSessionId}/evaluate"
                                 ),
+
                                 paths.matcher(
                                         HttpMethod.POST,
                                         "/api/v1/attendance/{attendanceDecisionId}/reviews"
                                 ),
+
                                 paths.matcher(
                                         HttpMethod.POST,
                                         "/api/v1/presence-evidence/sessions/{classSessionId}/teacher-confirmations"
                                 ),
+
                                 paths.matcher(
                                         HttpMethod.POST,
                                         "/api/v1/class-sessions"
                                 ),
+
                                 paths.matcher(
                                         HttpMethod.PATCH,
                                         "/api/v1/class-sessions/{classSessionId}/start"
                                 ),
+
                                 paths.matcher(
                                         HttpMethod.PATCH,
                                         "/api/v1/class-sessions/{classSessionId}/complete"
                                 ),
+
                                 paths.matcher(
                                         HttpMethod.PATCH,
                                         "/api/v1/class-sessions/{classSessionId}/cancel"
                                 ),
+
                                 paths.matcher(
                                         HttpMethod.POST,
                                         "/api/v1/session-blocks/sessions/{classSessionId}"
                                 ),
-                                paths.matcher(
-                                        HttpMethod.POST,
-                                        "/api/v1/users"
-                                ),
+
                                 paths.matcher(
                                         HttpMethod.POST,
                                         "/api/v1/institutions"
                                 ),
+
                                 paths.matcher(
                                         HttpMethod.POST,
                                         "/api/v1/institutions/{institutionId}/memberships"
@@ -121,6 +134,11 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/actuator/health"
                         ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/auth/me"
+                        ).authenticated()
 
                         .requestMatchers(
                                 HttpMethod.POST,
@@ -264,21 +282,6 @@ public class SecurityConfig {
 
                         .requestMatchers(
                                 HttpMethod.POST,
-                                "/api/v1/users"
-                        ).authenticated()
-
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/v1/users"
-                        ).authenticated()
-
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/v1/users/{userId}"
-                        ).authenticated()
-
-                        .requestMatchers(
-                                HttpMethod.POST,
                                 "/api/v1/institutions"
                         ).authenticated()
 
@@ -355,7 +358,9 @@ public class SecurityConfig {
                         .anyRequest().denyAll()
                 )
 
-                .httpBasic(Customizer.withDefaults())
+                .httpBasic(
+                        Customizer.withDefaults()
+                )
 
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
