@@ -32,6 +32,7 @@ public class AttendanceReviewService {
     private final CourseMembershipRepository courseMembershipRepository;
     private final InstitutionMembershipRepository institutionMembershipRepository;
     private final AuditService auditService;
+    private final AuthorizationService authorizationService;
     @Transactional
     public AttendanceReview review(
             UUID attendanceDecisionId,
@@ -41,17 +42,22 @@ public class AttendanceReviewService {
     ) {
 
         AttendanceDecision decision =
-                attendanceDecisionRepository
-                        .findById(attendanceDecisionId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Decisão de presença não encontrada."
-                                )
-                        );
+                findDecision(
+                        attendanceDecisionId
+                );
 
-        validateNewStatus(newStatus);
+        AttendanceDecisionSource source =
+                resolveReviewerSource(
+                        reviewer,
+                        decision
+                );
 
-        if (reason == null || reason.isBlank()) {
+        validateNewStatus(
+                newStatus
+        );
+
+        if (reason == null
+                || reason.isBlank()) {
 
             throw new BusinessRuleException(
                     "O motivo da revisão é obrigatório."
@@ -66,12 +72,6 @@ public class AttendanceReviewService {
             );
         }
 
-        AttendanceDecisionSource source =
-                validateReviewerAndResolveSource(
-                        reviewer,
-                        decision
-                );
-
         AttendanceStatus previousStatus =
                 decision.getStatus();
 
@@ -82,28 +82,60 @@ public class AttendanceReviewService {
             );
         }
 
-        Instant now = Instant.now();
+        Instant now =
+                Instant.now();
 
         AttendanceReview review =
                 new AttendanceReview();
 
-        review.setAttendanceDecision(decision);
-        review.setReviewer(reviewer);
-        review.setPreviousStatus(previousStatus);
-        review.setNewStatus(newStatus);
-        review.setReason(reason);
-        review.setReviewedAt(now);
+        review.setAttendanceDecision(
+                decision
+        );
+
+        review.setReviewer(
+                reviewer
+        );
+
+        review.setPreviousStatus(
+                previousStatus
+        );
+
+        review.setNewStatus(
+                newStatus
+        );
+
+        review.setReason(
+                reason
+        );
+
+        review.setReviewedAt(
+                now
+        );
 
         AttendanceReview savedReview =
                 attendanceReviewRepository.save(
                         review
                 );
 
-        decision.setStatus(newStatus);
-        decision.setDecisionSource(source);
-        decision.setDecidedBy(reviewer);
-        decision.setDecidedAt(now);
-        decision.setReason(reason);
+        decision.setStatus(
+                newStatus
+        );
+
+        decision.setDecisionSource(
+                source
+        );
+
+        decision.setDecidedBy(
+                reviewer
+        );
+
+        decision.setDecidedAt(
+                now
+        );
+
+        decision.setReason(
+                reason
+        );
 
         attendanceDecisionRepository.save(
                 decision
@@ -125,8 +157,25 @@ public class AttendanceReviewService {
     }
     @Transactional(readOnly = true)
     public List<AttendanceReview> findHistory(
-            UUID attendanceDecisionId
+            UUID attendanceDecisionId,
+            User currentUser
     ) {
+
+        AttendanceDecision decision =
+                findDecision(
+                        attendanceDecisionId
+                );
+
+        authorizationService
+                .requireCourseInstructorOrAdminOrSelf(
+                        currentUser,
+                        decision
+                                .getClassSession()
+                                .getCourse(),
+                        decision
+                                .getStudent()
+                                .getId()
+                );
 
         return attendanceReviewRepository
                 .findAllByAttendanceDecisionIdOrderByReviewedAtAsc(
@@ -141,6 +190,21 @@ public class AttendanceReviewService {
         return attendanceReviewRepository
                 .findAllByReviewerId(
                         reviewerId
+                );
+    }
+
+    private AttendanceDecision findDecision(
+            UUID attendanceDecisionId
+    ) {
+
+        return attendanceDecisionRepository
+                .findById(
+                        attendanceDecisionId
+                )
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Decisão de presença não encontrada."
+                        )
                 );
     }
 
@@ -166,31 +230,27 @@ public class AttendanceReviewService {
         }
     }
 
-    private AttendanceDecisionSource validateReviewerAndResolveSource(
+    private AttendanceDecisionSource resolveReviewerSource(
             User reviewer,
             AttendanceDecision decision
     ) {
 
-        UUID reviewerId = reviewer.getId();
-
-        UUID courseId =
+        var course =
                 decision
                         .getClassSession()
-                        .getCourse()
-                        .getId();
+                        .getCourse();
 
-        UUID institutionId =
-                decision
-                        .getClassSession()
-                        .getCourse()
-                        .getInstitution()
-                        .getId();
+        authorizationService
+                .requireCourseInstructorOrAdmin(
+                        reviewer,
+                        course
+                );
 
         CourseMembership courseMembership =
                 courseMembershipRepository
                         .findByUserIdAndCourseId(
-                                reviewerId,
-                                courseId
+                                reviewer.getId(),
+                                course.getId()
                         )
                         .orElse(null);
 
@@ -204,8 +264,10 @@ public class AttendanceReviewService {
         InstitutionMembership institutionMembership =
                 institutionMembershipRepository
                         .findByUserIdAndInstitutionId(
-                                reviewerId,
-                                institutionId
+                                reviewer.getId(),
+                                course
+                                        .getInstitution()
+                                        .getId()
                         )
                         .orElse(null);
 

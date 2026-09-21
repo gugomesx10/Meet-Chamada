@@ -17,7 +17,6 @@ import java.util.UUID;
 @RequestMapping("/api/v1/attendance")
 @RequiredArgsConstructor
 public class AttendanceReviewController {
-
     private final AttendanceReviewService attendanceReviewService;
     private final AuthenticatedUserService authenticatedUserService;
 
@@ -41,7 +40,9 @@ public class AttendanceReviewController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(
-                        AttendanceReviewResponse.from(review)
+                        AttendanceReviewResponse.from(
+                                review
+                        )
                 );
     }
 
@@ -50,13 +51,21 @@ public class AttendanceReviewController {
             @PathVariable UUID attendanceDecisionId
     ) {
 
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
         var reviews =
                 attendanceReviewService
-                        .findHistory(attendanceDecisionId)
+                        .findHistory(
+                                attendanceDecisionId,
+                                currentUser
+                        )
                         .stream()
                         .map(AttendanceReviewResponse::from)
                         .toList();
 
-        return ResponseEntity.ok(reviews);
+        return ResponseEntity.ok(
+                reviews
+        );
     }
 }

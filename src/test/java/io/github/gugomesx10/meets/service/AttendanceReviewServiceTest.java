@@ -48,13 +48,11 @@ class AttendanceReviewServiceTest {
     @Autowired
     private AttendanceDecisionRepository attendanceDecisionRepository;
 
-    @Autowired
-    private AttendanceReviewRepository attendanceReviewRepository;
-
     private Institution institution;
     private Course course;
     private ClassSession classSession;
     private User student;
+    private User anotherStudent;
     private User instructor;
     private User admin;
     private User outsider;
@@ -63,8 +61,12 @@ class AttendanceReviewServiceTest {
     @BeforeEach
     void setUp() {
 
-        institution = new Institution();
-        institution.setName("Escola da Nuvem");
+        institution =
+                new Institution();
+
+        institution.setName(
+                "Escola da Nuvem"
+        );
 
         institution =
                 institutionRepository.save(
@@ -74,6 +76,11 @@ class AttendanceReviewServiceTest {
         student = createUser(
                 "Gustavo",
                 "gustavo@teste.com"
+        );
+
+        anotherStudent = createUser(
+                "Outro aluno",
+                "outro@teste.com"
         );
 
         instructor = createUser(
@@ -91,17 +98,49 @@ class AttendanceReviewServiceTest {
                 "externo@teste.com"
         );
 
-        course = new Course();
+        createInstitutionMembership(
+                student,
+                InstitutionRole.STUDENT
+        );
 
-        course.setInstitution(institution);
-        course.setName("AWS re/Start");
+        createInstitutionMembership(
+                anotherStudent,
+                InstitutionRole.STUDENT
+        );
+
+        createInstitutionMembership(
+                instructor,
+                InstitutionRole.TEACHER
+        );
+
+        createInstitutionMembership(
+                admin,
+                InstitutionRole.ADMIN
+        );
+
+        course =
+                new Course();
+
+        course.setInstitution(
+                institution
+        );
+
+        course.setName(
+                "AWS re/Start"
+        );
+
         course.setDescription(
                 "Treinamento em computação em nuvem"
         );
-        course.setStartDate(LocalDate.now());
+
+        course.setStartDate(
+                LocalDate.now()
+        );
+
         course.setEndDate(
                 LocalDate.now().plusMonths(3)
         );
+
         course.setStatus(
                 CourseStatus.ACTIVE
         );
@@ -111,56 +150,44 @@ class AttendanceReviewServiceTest {
                         course
                 );
 
-        CourseMembership studentMembership =
-                new CourseMembership();
-
-        studentMembership.setCourse(course);
-        studentMembership.setUser(student);
-        studentMembership.setRole(
+        createCourseMembership(
+                student,
                 CourseRole.STUDENT
         );
 
-        courseMembershipRepository.save(
-                studentMembership
+        createCourseMembership(
+                anotherStudent,
+                CourseRole.STUDENT
         );
 
-        CourseMembership instructorMembership =
-                new CourseMembership();
-
-        instructorMembership.setCourse(course);
-        instructorMembership.setUser(instructor);
-        instructorMembership.setRole(
+        createCourseMembership(
+                instructor,
                 CourseRole.INSTRUCTOR
         );
 
-        courseMembershipRepository.save(
-                instructorMembership
+        classSession =
+                new ClassSession();
+
+        classSession.setCourse(
+                course
         );
 
-        InstitutionMembership adminMembership =
-                new InstitutionMembership();
-
-        adminMembership.setInstitution(institution);
-        adminMembership.setUser(admin);
-        adminMembership.setRole(
-                InstitutionRole.ADMIN
+        classSession.setTitle(
+                "Treinamento AWS"
         );
 
-        institutionMembershipRepository.save(
-                adminMembership
+        classSession.setSessionDate(
+                LocalDate.now()
         );
 
-        classSession = new ClassSession();
-
-        classSession.setCourse(course);
-        classSession.setTitle("Treinamento AWS");
-        classSession.setSessionDate(LocalDate.now());
         classSession.setStartTime(
                 LocalTime.of(9, 0)
         );
+
         classSession.setEndTime(
                 LocalTime.of(12, 0)
         );
+
         classSession.setStatus(
                 ClassSessionStatus.COMPLETED
         );
@@ -170,20 +197,9 @@ class AttendanceReviewServiceTest {
                         classSession
                 );
 
-        decision = new AttendanceDecision();
-
-        decision.setStudent(student);
-        decision.setClassSession(classSession);
-        decision.setStatus(
-                AttendanceStatus.REVIEW_REQUIRED
-        );
-        decision.setDecisionSource(
-                AttendanceDecisionSource.SYSTEM
-        );
-
         decision =
-                attendanceDecisionRepository.save(
-                        decision
+                createDecision(
+                        student
                 );
     }
 
@@ -214,7 +230,9 @@ class AttendanceReviewServiceTest {
 
         AttendanceDecision updated =
                 attendanceDecisionRepository
-                        .findById(decision.getId())
+                        .findById(
+                                decision.getId()
+                        )
                         .orElseThrow();
 
         assertEquals(
@@ -250,7 +268,9 @@ class AttendanceReviewServiceTest {
 
         AttendanceDecision updated =
                 attendanceDecisionRepository
-                        .findById(decision.getId())
+                        .findById(
+                                decision.getId()
+                        )
                         .orElseThrow();
 
         assertEquals(
@@ -365,10 +385,10 @@ class AttendanceReviewServiceTest {
                 );
 
         var history =
-                attendanceReviewRepository
-                        .findAllByAttendanceDecisionIdOrderByReviewedAtAsc(
-                                decision.getId()
-                        );
+                attendanceReviewService.findHistory(
+                        decision.getId(),
+                        instructor
+                );
 
         assertEquals(
                 2,
@@ -396,16 +416,212 @@ class AttendanceReviewServiceTest {
         );
     }
 
+    @Test
+    void alunoDeveConsultarProprioHistorico() {
+
+        AttendanceReview review =
+                attendanceReviewService.review(
+                        decision.getId(),
+                        instructor,
+                        AttendanceStatus.CONFIRMED,
+                        "Presença confirmada."
+                );
+
+        var history =
+                attendanceReviewService.findHistory(
+                        decision.getId(),
+                        student
+                );
+
+        assertEquals(
+                1,
+                history.size()
+        );
+
+        assertEquals(
+                review.getId(),
+                history.getFirst().getId()
+        );
+    }
+
+    @Test
+    void instrutorDeveConsultarHistoricoDoAluno() {
+
+        attendanceReviewService.review(
+                decision.getId(),
+                instructor,
+                AttendanceStatus.CONFIRMED,
+                "Presença confirmada."
+        );
+
+        var history =
+                attendanceReviewService.findHistory(
+                        decision.getId(),
+                        instructor
+                );
+
+        assertEquals(
+                1,
+                history.size()
+        );
+    }
+
+    @Test
+    void administradorDeveConsultarHistoricoDoAluno() {
+
+        attendanceReviewService.review(
+                decision.getId(),
+                instructor,
+                AttendanceStatus.CONFIRMED,
+                "Presença confirmada."
+        );
+
+        var history =
+                attendanceReviewService.findHistory(
+                        decision.getId(),
+                        admin
+                );
+
+        assertEquals(
+                1,
+                history.size()
+        );
+    }
+
+    @Test
+    void outroAlunoNaoDeveConsultarHistorico() {
+
+        attendanceReviewService.review(
+                decision.getId(),
+                instructor,
+                AttendanceStatus.CONFIRMED,
+                "Presença confirmada."
+        );
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> attendanceReviewService.findHistory(
+                        decision.getId(),
+                        anotherStudent
+                )
+        );
+    }
+
+    @Test
+    void usuarioSemVinculoNaoDeveConsultarHistorico() {
+
+        attendanceReviewService.review(
+                decision.getId(),
+                instructor,
+                AttendanceStatus.CONFIRMED,
+                "Presença confirmada."
+        );
+
+        assertThrows(
+                ForbiddenOperationException.class,
+                () -> attendanceReviewService.findHistory(
+                        decision.getId(),
+                        outsider
+                )
+        );
+    }
+
+    private AttendanceDecision createDecision(
+            User targetStudent
+    ) {
+
+        AttendanceDecision attendanceDecision =
+                new AttendanceDecision();
+
+        attendanceDecision.setStudent(
+                targetStudent
+        );
+
+        attendanceDecision.setClassSession(
+                classSession
+        );
+
+        attendanceDecision.setStatus(
+                AttendanceStatus.REVIEW_REQUIRED
+        );
+
+        attendanceDecision.setDecisionSource(
+                AttendanceDecisionSource.SYSTEM
+        );
+
+        return attendanceDecisionRepository.save(
+                attendanceDecision
+        );
+    }
+
     private User createUser(
             String name,
             String email
     ) {
 
-        User user = new User();
+        User user =
+                new User();
 
-        user.setName(name);
-        user.setEmail(email);
+        user.setName(
+                name
+        );
 
-        return userRepository.save(user);
+        user.setEmail(
+                email
+        );
+
+        return userRepository.save(
+                user
+        );
+    }
+
+    private InstitutionMembership createInstitutionMembership(
+            User user,
+            InstitutionRole role
+    ) {
+
+        InstitutionMembership membership =
+                new InstitutionMembership();
+
+        membership.setInstitution(
+                institution
+        );
+
+        membership.setUser(
+                user
+        );
+
+        membership.setRole(
+                role
+        );
+
+        return institutionMembershipRepository.save(
+                membership
+        );
+    }
+
+    private CourseMembership createCourseMembership(
+            User user,
+            CourseRole role
+    ) {
+
+        CourseMembership membership =
+                new CourseMembership();
+
+        membership.setCourse(
+                course
+        );
+
+        membership.setUser(
+                user
+        );
+
+        membership.setRole(
+                role
+        );
+
+        return courseMembershipRepository.save(
+                membership
+        );
     }
 }
