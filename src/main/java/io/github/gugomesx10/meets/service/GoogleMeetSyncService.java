@@ -1,9 +1,9 @@
 package io.github.gugomesx10.meets.service;
 
-import io.github.gugomesx10.meets.dto.googlemeet.GoogleMeetConferenceRecordsResponse;
 import io.github.gugomesx10.meets.dto.googlemeet.GoogleMeetSyncResponse;
 import io.github.gugomesx10.meets.entity.ClassSession;
 import io.github.gugomesx10.meets.entity.GoogleMeetParticipantLink;
+import io.github.gugomesx10.meets.entity.PresenceEvidence;
 import io.github.gugomesx10.meets.entity.User;
 import io.github.gugomesx10.meets.entity.enums.CourseRole;
 import io.github.gugomesx10.meets.entity.enums.EvidenceSource;
@@ -18,13 +18,18 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.List;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.UUID;
 
 @Service
 @Profile("oauth")
 @RequiredArgsConstructor
 public class GoogleMeetSyncService {
+
+    private static final ZoneId APPLICATION_ZONE =
+            ZoneId.of("America/Sao_Paulo");
+
     private final ClassSessionRepository classSessionRepository;
     private final GoogleMeetService googleMeetService;
     private final GoogleMeetParticipantLinkRepository googleMeetParticipantLinkRepository;
@@ -55,7 +60,9 @@ public class GoogleMeetSyncService {
                 );
 
         if (classSession.getGoogleMeetSpaceName() == null
-                || classSession.getGoogleMeetSpaceName().isBlank()) {
+                || classSession
+                .getGoogleMeetSpaceName()
+                .isBlank()) {
 
             throw new BusinessRuleException(
                     "A aula ainda não possui um espaço do Google Meet vinculado."
@@ -147,14 +154,52 @@ public class GoogleMeetSyncService {
                     continue;
                 }
 
-                boolean alreadyImported =
+                var existingEvidence =
                         presenceEvidenceRepository
-                                .existsBySourceAndExternalReference(
+                                .findBySourceAndExternalReference(
                                         EvidenceSource.GOOGLE_MEET,
                                         participantSession.name()
                                 );
 
-                if (alreadyImported) {
+                if (existingEvidence.isPresent()) {
+
+                    PresenceEvidence evidence =
+                            existingEvidence.get();
+
+                    /*
+                     * Uma referência externa nunca pode mudar
+                     * silenciosamente de aluno ou de aula.
+                     */
+                    if (!evidence.getStudent()
+                            .getId()
+                            .equals(student.getId())
+                            || !evidence.getClassSession()
+                            .getId()
+                            .equals(classSession.getId())) {
+
+                        throw new ConflictException(
+                                "A sessão externa do Google Meet já está vinculada a outra evidência."
+                        );
+                    }
+
+                    /*
+                     * Durante a aula:
+                     * endTime = null
+                     *
+                     * Depois que o participante sai:
+                     * endTime passa a existir.
+                     */
+                    if (evidence.getEndedAt() == null
+                            && participantSession.endTime() != null) {
+
+                        evidence.setEndedAt(
+                                participantSession.endTime()
+                        );
+
+                        presenceEvidenceRepository.save(
+                                evidence
+                        );
+                    }
 
                     sessionsAlreadyImported++;
                     continue;
@@ -213,14 +258,30 @@ public class GoogleMeetSyncService {
             ClassSession classSession
     ) {
 
-        String currentConferenceRecord =
+        String storedConferenceRecord =
                 classSession
                         .getGoogleMeetConferenceRecordName();
 
-        if (currentConferenceRecord != null
-                && !currentConferenceRecord.isBlank()) {
+        /*
+         * Se já capturamos a conferência desta aula,
+         * ela é a fonte da verdade.
+         */
+        if (storedConferenceRecord != null
+                && !storedConferenceRecord.isBlank()) {
 
-            return currentConferenceRecord;
+            return storedConferenceRecord;
+        }
+
+        /*
+         * Uma aula antiga sem conferenceRecord não pode
+         * simplesmente pegar a conferência ativa de hoje.
+         */
+        if (!isToday(classSession)) {
+
+            throw new BusinessRuleException(
+                    "A aula não possui um registro de conferência salvo. "
+                            + "Não é seguro associar automaticamente uma conferência atual a uma aula histórica."
+            );
         }
 
         var space =
@@ -230,65 +291,26 @@ public class GoogleMeetSyncService {
                                         .getGoogleMeetSpaceName()
                         );
 
-        if (space != null
-                && space.activeConference() != null
-                && space.activeConference()
-                .conferenceRecord() != null
-                && !space.activeConference()
+        if (space == null
+                || space.activeConference() == null
+                || space.activeConference()
+                .conferenceRecord() == null
+                || space.activeConference()
                 .conferenceRecord()
                 .isBlank()) {
 
-            String conferenceRecord =
-                    space.activeConference()
-                            .conferenceRecord();
-
-            classSession
-                    .setGoogleMeetConferenceRecordName(
-                            conferenceRecord
-                    );
-
-            classSessionRepository.save(
-                    classSession
-            );
-
-            return conferenceRecord;
-        }
-
-        List<GoogleMeetConferenceRecordsResponse.ConferenceRecordResponse>
-                conferenceRecords =
-                googleMeetService
-                        .findConferenceRecordsBySpaceName(
-                                classSession
-                                        .getGoogleMeetSpaceName()
-                        );
-
-        if (conferenceRecords.isEmpty()) {
-
-            throw new ResourceNotFoundException(
-                    "Nenhum registro de conferência foi encontrado para este espaço do Google Meet."
-            );
-        }
-
-        if (conferenceRecords.size() > 1) {
-
-            throw new ConflictException(
-                    "Mais de uma conferência foi encontrada para este espaço do Google Meet. Não é possível determinar automaticamente qual pertence à aula."
+            throw new BusinessRuleException(
+                    "Nenhuma conferência ativa foi encontrada para a aula de hoje."
             );
         }
 
         String conferenceRecord =
-                conferenceRecords
-                        .getFirst()
-                        .name();
+                space.activeConference()
+                        .conferenceRecord();
 
-        if (conferenceRecord == null
-                || conferenceRecord.isBlank()) {
-
-            throw new BusinessRuleException(
-                    "O registro de conferência retornado pelo Google Meet é inválido."
-            );
-        }
-
+        /*
+         * Captura uma única vez.
+         */
         classSession
                 .setGoogleMeetConferenceRecordName(
                         conferenceRecord
@@ -299,5 +321,16 @@ public class GoogleMeetSyncService {
         );
 
         return conferenceRecord;
+    }
+
+    private boolean isToday(
+            ClassSession classSession
+    ) {
+
+        return LocalDate.now(
+                APPLICATION_ZONE
+        ).equals(
+                classSession.getSessionDate()
+        );
     }
 }

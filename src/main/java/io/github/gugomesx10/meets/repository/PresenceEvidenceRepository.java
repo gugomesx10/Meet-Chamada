@@ -5,6 +5,7 @@ import io.github.gugomesx10.meets.entity.enums.EvidenceSource;
 import io.github.gugomesx10.meets.entity.enums.PresenceEvidenceType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface PresenceEvidenceRepository extends JpaRepository<PresenceEvidence, UUID> {
@@ -20,6 +21,10 @@ public interface PresenceEvidenceRepository extends JpaRepository<PresenceEviden
     );
     List<PresenceEvidence> findAllBySessionBlockId(UUID sessionBlockId);
     boolean existsBySourceAndExternalReference(
+            EvidenceSource source,
+            String externalReference
+    );
+    Optional<PresenceEvidence> findBySourceAndExternalReference(
             EvidenceSource source,
             String externalReference
     );
