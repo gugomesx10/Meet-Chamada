@@ -1,6 +1,7 @@
 package io.github.gugomesx10.meets.repository;
 
 import io.github.gugomesx10.meets.entity.InstitutionMembership;
+import io.github.gugomesx10.meets.entity.enums.InstitutionRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
@@ -17,4 +18,5 @@ public interface InstitutionMembershipRepository extends JpaRepository<Instituti
             UUID userId,
             UUID institutionId
     );
+    long countByInstitutionIdAndRole(UUID institutionId, InstitutionRole role);
 }

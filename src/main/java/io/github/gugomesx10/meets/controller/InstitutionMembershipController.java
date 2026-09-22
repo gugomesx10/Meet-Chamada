@@ -2,6 +2,7 @@ package io.github.gugomesx10.meets.controller;
 
 import io.github.gugomesx10.meets.dto.membership.CreateInstitutionMembershipRequest;
 import io.github.gugomesx10.meets.dto.membership.InstitutionMembershipResponse;
+import io.github.gugomesx10.meets.dto.membership.UpdateInstitutionMembershipRoleRequest;
 import io.github.gugomesx10.meets.entity.User;
 import io.github.gugomesx10.meets.service.AuthenticatedUserService;
 import io.github.gugomesx10.meets.service.InstitutionMembershipService;
@@ -45,6 +46,31 @@ public class InstitutionMembershipController {
                                 membership
                         )
                 );
+    }
+
+    @PatchMapping("/{institutionId}/memberships/{userId}/role")
+    public ResponseEntity<InstitutionMembershipResponse> updateRole(
+            @PathVariable UUID institutionId,
+            @PathVariable UUID userId,
+            @Valid @RequestBody UpdateInstitutionMembershipRoleRequest request
+    ) {
+
+        User currentUser =
+                authenticatedUserService.getCurrentUser();
+
+        var membership =
+                institutionMembershipService.updateRole(
+                        institutionId,
+                        userId,
+                        request.role(),
+                        currentUser
+                );
+
+        return ResponseEntity.ok(
+                InstitutionMembershipResponse.from(
+                        membership
+                )
+        );
     }
 
     @GetMapping("/{institutionId}/memberships")

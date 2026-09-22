@@ -24,6 +24,7 @@ public class InstitutionMembershipService {
     private final InstitutionRepository institutionRepository;
     private final UserRepository userRepository;
     private final AuthorizationService authorizationService;
+    private final AuditService auditService;
     @Transactional
     public InstitutionMembership create(
             UUID institutionId,
@@ -56,7 +57,6 @@ public class InstitutionMembershipService {
                         );
 
         if (role == null) {
-
             throw new BusinessRuleException(
                     "O papel do usuário na instituição é obrigatório."
             );
@@ -76,21 +76,108 @@ public class InstitutionMembershipService {
         InstitutionMembership membership =
                 new InstitutionMembership();
 
-        membership.setInstitution(
-                institution
+        membership.setInstitution(institution);
+        membership.setUser(user);
+        membership.setRole(role);
+
+        InstitutionMembership saved =
+                institutionMembershipRepository.save(
+                        membership
+                );
+
+        auditService.register(
+                currentUser,
+                "INSTITUTION_MEMBERSHIP_CREATED",
+                "InstitutionMembership",
+                saved.getId(),
+                "Vínculo institucional criado para o usuário "
+                        + userId
+                        + " com papel "
+                        + role
+                        + "."
         );
 
-        membership.setUser(
-                user
+        return saved;
+    }
+    @Transactional
+    public InstitutionMembership updateRole(
+            UUID institutionId,
+            UUID userId,
+            InstitutionRole newRole,
+            User currentUser
+    ) {
+
+        authorizationService.requireInstitutionAdmin(
+                currentUser,
+                institutionId
         );
+
+        if (newRole == null) {
+            throw new BusinessRuleException(
+                    "O novo papel do usuário na instituição é obrigatório."
+            );
+        }
+
+        InstitutionMembership membership =
+                institutionMembershipRepository
+                        .findByUserIdAndInstitutionId(
+                                userId,
+                                institutionId
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Vínculo institucional não encontrado."
+                                )
+                        );
+
+        InstitutionRole currentRole =
+                membership.getRole();
+
+        if (currentRole == newRole) {
+            return membership;
+        }
+
+        if (currentRole == InstitutionRole.ADMIN
+                && newRole != InstitutionRole.ADMIN) {
+
+            long adminCount =
+                    institutionMembershipRepository
+                            .countByInstitutionIdAndRole(
+                                    institutionId,
+                                    InstitutionRole.ADMIN
+                            );
+
+            if (adminCount <= 1) {
+                throw new BusinessRuleException(
+                        "Não é possível alterar o papel do último administrador da instituição."
+                );
+            }
+        }
 
         membership.setRole(
-                role
+                newRole
         );
 
-        return institutionMembershipRepository.save(
-                membership
+        InstitutionMembership saved =
+                institutionMembershipRepository.save(
+                        membership
+                );
+
+        auditService.register(
+                currentUser,
+                "INSTITUTION_MEMBERSHIP_ROLE_UPDATED",
+                "InstitutionMembership",
+                saved.getId(),
+                "Papel institucional do usuário "
+                        + userId
+                        + " alterado de "
+                        + currentRole
+                        + " para "
+                        + newRole
+                        + "."
         );
+
+        return saved;
     }
     @Transactional(readOnly = true)
     public InstitutionMembership find(

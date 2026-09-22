@@ -11,12 +11,17 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.UUID;
 
 @Service
 @Profile("oauth")
 @RequiredArgsConstructor
 public class GoogleMeetClassSessionService {
+
+    private static final ZoneId APPLICATION_ZONE =
+            ZoneId.of("America/Sao_Paulo");
 
     private final ClassSessionRepository classSessionRepository;
     private final GoogleMeetService googleMeetService;
@@ -60,9 +65,7 @@ public class GoogleMeetClassSessionService {
                 classSession.getGoogleMeetSpaceName();
 
         if (currentSpaceName != null
-                && !currentSpaceName.equals(
-                space.name()
-        )) {
+                && !currentSpaceName.equals(space.name())) {
 
             throw new ConflictException(
                     "A aula já está vinculada a outro espaço do Google Meet."
@@ -73,12 +76,25 @@ public class GoogleMeetClassSessionService {
                 space.name()
         );
 
-        if (space.activeConference() != null
-                && space.activeConference()
-                .conferenceRecord() != null
-                && !space.activeConference()
-                .conferenceRecord()
-                .isBlank()) {
+        /*
+         * ConferenceRecord é imutável depois de capturado.
+         * Nunca sobrescrevemos automaticamente.
+         */
+        if (hasConferenceRecord(classSession)) {
+            return classSessionRepository.save(
+                    classSession
+            );
+        }
+
+        /*
+         * Só capturamos activeConference automaticamente
+         * para a ClassSession do dia atual.
+         *
+         * Isso evita:
+         * Aula 18/09 -> pegar conferência ativa de 22/09.
+         */
+        if (isToday(classSession)
+                && hasActiveConference(space)) {
 
             classSession
                     .setGoogleMeetConferenceRecordName(
@@ -90,5 +106,44 @@ public class GoogleMeetClassSessionService {
         return classSessionRepository.save(
                 classSession
         );
+    }
+
+    private boolean isToday(
+            ClassSession classSession
+    ) {
+
+        LocalDate today =
+                LocalDate.now(
+                        APPLICATION_ZONE
+                );
+
+        return today.equals(
+                classSession.getSessionDate()
+        );
+    }
+
+    private boolean hasConferenceRecord(
+            ClassSession classSession
+    ) {
+
+        return classSession
+                .getGoogleMeetConferenceRecordName()
+                != null
+                && !classSession
+                .getGoogleMeetConferenceRecordName()
+                .isBlank();
+    }
+
+    private boolean hasActiveConference(
+            GoogleMeetSpaceResponse space
+    ) {
+
+        return space != null
+                && space.activeConference() != null
+                && space.activeConference()
+                .conferenceRecord() != null
+                && !space.activeConference()
+                .conferenceRecord()
+                .isBlank();
     }
 }
